@@ -9,6 +9,7 @@
 `include "rtl/game_overlay/knife_trail_renderer.sv"
 `include "rtl/game_overlay/knife_renderer.sv"
 `include "rtl/game_overlay/ar_game_overlay.sv"
+`include "rtl/background_rom.sv"
 
 module final_top (
     input  logic        CLOCK_50,
@@ -57,7 +58,8 @@ module final_top (
     localparam logic ENABLE_PROP_TRACKER = 1'b1;
     localparam logic ENABLE_KNIFE_SPRITE = 1'b1;
     localparam logic ENABLE_KNIFE_TRAIL = 1'b0;
-    localparam logic ENABLE_PROP_BBOX_DEBUG = 1'b1;
+    localparam logic ENABLE_PROP_BBOX_DEBUG = 1'b0;
+    localparam logic USE_STATIC_BACKGROUND = 1'b1;
     localparam logic SHOW_CAMERA_BACKGROUND = 1'b1;
     localparam logic SHOW_TRACKER_MASK = 1'b1;
 
@@ -126,6 +128,9 @@ module final_top (
     logic [7:0]  pat_r;
     logic [7:0]  pat_g;
     logic [7:0]  pat_b;
+    logic [7:0]  bg_rom_r;
+    logic [7:0]  bg_rom_g;
+    logic [7:0]  bg_rom_b;
     logic [7:0]  base_r;
     logic [7:0]  base_g;
     logic [7:0]  base_b;
@@ -469,12 +474,12 @@ module final_top (
             green2_m = {g7_m, 1'b0};
             rb_sum_m = {1'b0, r7_m} + {1'b0, b7_m};
 
-            green_mask_rgb565 = (r5_m <= 5'd18) &&
-                                (g6_m >= 6'd12) &&
-                                (b5_m <= 5'd23) &&
-                                (g7_m > (r7_m + 7'd9)) &&
-                                ((g7_m + 7'd6) > b7_m) &&
-                                (green2_m > (rb_sum_m + 8'd10));
+            green_mask_rgb565 = (r5_m <= 5'd16) &&
+                                (g6_m >= 6'd16) &&
+                                (b5_m <= 5'd20) &&
+                                (g7_m > (r7_m + 7'd14)) &&
+                                ((g7_m + 7'd4) > b7_m) &&
+                                (green2_m > (rb_sum_m + 8'd20));
         end
     endfunction
 
@@ -509,6 +514,16 @@ module final_top (
         .r      (pat_r),
         .g      (pat_g),
         .b      (pat_b)
+    );
+
+    background_rom game_background (
+        .clk    (vga_clk),
+        .reset  (reset),
+        .draw_x (draw_x),
+        .draw_y (draw_y),
+        .r8     (bg_rom_r),
+        .g8     (bg_rom_g),
+        .b8     (bg_rom_b)
     );
 
     always_ff @(posedge CAM_PCLK or posedge reset) begin
@@ -786,6 +801,10 @@ module final_top (
             base_r = 8'h00;
             base_g = 8'h00;
             base_b = 8'h00;
+        end else if (USE_STATIC_BACKGROUND) begin
+            base_r = bg_rom_r;
+            base_g = bg_rom_g;
+            base_b = bg_rom_b;
         end else if (SHOW_CAMERA_BACKGROUND && display_sram_pixel) begin
             if (SHOW_TRACKER_MASK) begin
                 base_r = tracker_mask_pixel ? 8'hff : 8'h00;

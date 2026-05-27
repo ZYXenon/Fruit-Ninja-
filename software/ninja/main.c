@@ -55,6 +55,10 @@
 #define KEY2_MASK          (1u << 2)
 #define BLADE_CUT_MIN_DELTA 14u
 #define FRUIT_HIT_PADDING 36u
+#define COMBO_WINDOW_FRAMES 90u
+#define COMBO_MAX_COUNT 9u
+#define COMBO_BONUS_STEP 5u
+#define BLADE_TRAIL_HIT_STEPS 8u
 
 typedef struct fruit_state {
     uint8_t active;
@@ -77,9 +81,17 @@ static uint8_t time_ones;
 static uint8_t second_frame_count;
 static uint8_t auto_spawn_timer;
 static uint8_t next_spawn_delay = 45u;
+static uint8_t combo_count;
+static uint8_t combo_timer;
 static uint8_t prev_blade_valid;
 static uint16_t prev_blade_x;
 static uint16_t prev_blade_y;
+static uint16_t blade_cut_start_x;
+static uint16_t blade_cut_start_y;
+static uint16_t blade_cut_end_x;
+static uint16_t blade_cut_end_y;
+
+static void apply_score_delta(int16_t delta);
 
 static uint32_t pio_read(uint32_t base)
 {
@@ -96,6 +108,71 @@ static void reset_blade_motion(void)
     prev_blade_valid = 0u;
     prev_blade_x = 0u;
     prev_blade_y = 0u;
+    blade_cut_start_x = 0u;
+    blade_cut_start_y = 0u;
+    blade_cut_end_x = 0u;
+    blade_cut_end_y = 0u;
+}
+
+static void reset_combo(void)
+{
+    combo_count = 0u;
+    combo_timer = 0u;
+}
+
+static int16_t register_fruit_slice(void)
+{
+    int16_t score_delta = 10;
+
+    if (combo_timer != 0u)
+    {
+        if (combo_count < COMBO_MAX_COUNT)
+        {
+            combo_count++;
+        }
+    }
+    else
+    {
+        combo_count = 1u;
+    }
+
+    combo_timer = COMBO_WINDOW_FRAMES;
+
+    if (combo_count > 1u)
+    {
+        score_delta += (int16_t)((combo_count - 1u) * COMBO_BONUS_STEP);
+    }
+
+    apply_score_delta(score_delta);
+    return score_delta;
+}
+
+static void update_combo_timer(void)
+{
+    if (combo_timer != 0u)
+    {
+        combo_timer--;
+
+        if (combo_timer == 0u)
+        {
+            combo_count = 0u;
+        }
+    }
+}
+
+static int16_t multi_slice_bonus(uint8_t sliced_count)
+{
+    switch (sliced_count)
+    {
+        case 2u:
+            return 10;
+        case 3u:
+            return 25;
+        case 4u:
+            return 45;
+        default:
+            return 0;
+    }
 }
 
 static uint16_t abs_i32(int32_t value)
@@ -116,6 +193,28 @@ static uint8_t ellipse_hit_i32(int32_t dx, int32_t dy, uint16_t rx, uint16_t ry)
     return (lhs <= rhs) ? 1u : 0u;
 }
 
+static uint8_t blade_trail_hits_ellipse(int32_t fruit_x, int32_t fruit_y, uint16_t rx, uint16_t ry)
+{
+    uint8_t step;
+    int32_t start_x = (int32_t)blade_cut_start_x;
+    int32_t start_y = (int32_t)blade_cut_start_y;
+    int32_t dx = (int32_t)blade_cut_end_x - start_x;
+    int32_t dy = (int32_t)blade_cut_end_y - start_y;
+
+    for (step = 0u; step <= BLADE_TRAIL_HIT_STEPS; step++)
+    {
+        int32_t sample_x = start_x + ((dx * (int32_t)step) / (int32_t)BLADE_TRAIL_HIT_STEPS);
+        int32_t sample_y = start_y + ((dy * (int32_t)step) / (int32_t)BLADE_TRAIL_HIT_STEPS);
+
+        if (ellipse_hit_i32(sample_x - fruit_x, sample_y - fruit_y, rx, ry))
+        {
+            return 1u;
+        }
+    }
+
+    return 0u;
+}
+
 static uint8_t blade_cut_active(uint8_t blade_valid, uint16_t blade_x, uint16_t blade_y)
 {
     uint8_t cut_active = 0u;
@@ -128,6 +227,10 @@ static uint8_t blade_cut_active(uint8_t blade_valid, uint16_t blade_x, uint16_t 
         if ((uint16_t)(dx + dy) >= BLADE_CUT_MIN_DELTA)
         {
             cut_active = 1u;
+            blade_cut_start_x = prev_blade_x;
+            blade_cut_start_y = prev_blade_y;
+            blade_cut_end_x = blade_x;
+            blade_cut_end_y = blade_y;
         }
     }
 
@@ -246,6 +349,7 @@ static void start_game(void)
     auto_spawn_timer = 0u;
     next_spawn_delay = 45u;
     reset_blade_motion();
+    reset_combo();
     game_state = GAME_PLAYING;
 }
 
@@ -297,7 +401,25 @@ static void apply_score_delta(int16_t delta)
     score_value = (uint16_t)next_score;
 }
 
-static void emit_slice_effect(uint8_t slot)
+static uint8_t popup_class_for_score(int16_t score_delta)
+{
+    if (score_delta >= 25)
+    {
+        return 3u;
+    }
+    if (score_delta >= 20)
+    {
+        return 2u;
+    }
+    if (score_delta >= 15)
+    {
+        return 1u;
+    }
+
+    return 0u;
+}
+
+static void emit_slice_effect(uint8_t slot, uint8_t popup_class)
 {
     int32_t x = fruits[slot].x_fp >> FP_SHIFT;
     int32_t y = fruits[slot].y_fp >> FP_SHIFT;
@@ -308,7 +430,8 @@ static void emit_slice_effect(uint8_t slot)
            ((uint32_t)(slot & 0x3u) << 29) |
            ((uint32_t)(fruits[slot].type & 0x7u) << 26) |
            (((uint32_t)x & 0xFFFu) << 14) |
-           (((uint32_t)y & 0xFFFu) << 2);
+           (((uint32_t)y & 0xFFFu) << 2) |
+           ((uint32_t)popup_class & 0x3u);
 
     pio_write(EFFECT_EVENT_PIO_BASE, word);
 }
@@ -316,6 +439,11 @@ static void emit_slice_effect(uint8_t slot)
 static void update_fruits(uint8_t blade_valid, uint16_t blade_x, uint16_t blade_y)
 {
     uint8_t i;
+    uint8_t sliced_fruits_this_frame = 0u;
+    uint8_t sliced_bomb_this_frame = 0u;
+
+    (void)blade_x;
+    (void)blade_y;
 
     for (i = 0; i < MAX_FRUITS; i++)
     {
@@ -331,15 +459,13 @@ static void update_fruits(uint8_t blade_valid, uint16_t blade_x, uint16_t blade_
             uint16_t hit_w = fruit_half_width(fruits[i].type) + FRUIT_HIT_PADDING;
             uint16_t hit_h = fruit_half_height(fruits[i].type) + FRUIT_HIT_PADDING;
 
-            if (ellipse_hit_i32((int32_t)blade_x - fruit_x,
-                                (int32_t)blade_y - fruit_y,
-                                hit_w,
-                                hit_h))
+            if (blade_trail_hits_ellipse(fruit_x, fruit_y, hit_w, hit_h))
             {
-                emit_slice_effect(i);
-
                 if (fruits[i].type == FRUIT_BOMB)
                 {
+                    emit_slice_effect(i, 0u);
+                    reset_combo();
+                    sliced_bomb_this_frame = 1u;
                     apply_score_delta(-30);
                     if (bomb_hits < 3u)
                     {
@@ -348,7 +474,9 @@ static void update_fruits(uint8_t blade_valid, uint16_t blade_x, uint16_t blade_
                 }
                 else
                 {
-                    apply_score_delta(10);
+                    int16_t slice_score = register_fruit_slice();
+                    emit_slice_effect(i, popup_class_for_score(slice_score));
+                    sliced_fruits_this_frame++;
                 }
 
                 fruits[i].active = 0u;
@@ -366,11 +494,22 @@ static void update_fruits(uint8_t blade_valid, uint16_t blade_x, uint16_t blade_
         {
             if (fruits[i].type != FRUIT_BOMB)
             {
+                reset_combo();
                 apply_score_delta(-5);
             }
 
             fruits[i].active = 0u;
         }
+    }
+
+    if ((sliced_fruits_this_frame > 1u) && !sliced_bomb_this_frame)
+    {
+        apply_score_delta(multi_slice_bonus(sliced_fruits_this_frame));
+    }
+
+    if ((sliced_fruits_this_frame == 0u) && !sliced_bomb_this_frame)
+    {
+        update_combo_timer();
     }
 }
 

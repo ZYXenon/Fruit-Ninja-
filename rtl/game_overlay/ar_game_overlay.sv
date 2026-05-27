@@ -23,6 +23,11 @@ module ar_game_overlay (
 );
 
     localparam int MAX_FRUITS = 4;
+    localparam logic [2:0] FRUIT_BOMB = 3'd5;
+    localparam logic [5:0] POPUP_AGE_LAST = 6'd47;
+    localparam int POPUP_DIGIT_W = 12;
+    localparam int POPUP_DIGIT_H = 18;
+    localparam int POPUP_DIGIT_STEP = 14;
 
     logic [7:0] next_r;
     logic [7:0] next_g;
@@ -64,6 +69,22 @@ module ar_game_overlay (
 
     logic signed [11:0] effect_event_x;
     logic signed [11:0] effect_event_y;
+    logic frame_tick;
+
+    logic popup_active;
+    logic popup_negative;
+    logic [1:0] popup_class;
+    logic [5:0] popup_age;
+    logic signed [11:0] popup_x;
+    logic signed [11:0] popup_y;
+    logic [3:0] popup_tens;
+    logic [3:0] popup_ones;
+    logic popup_body_hit;
+    logic popup_shadow_hit;
+    logic popup_hit;
+    logic [9:0] popup_r;
+    logic [9:0] popup_g;
+    logic [9:0] popup_b;
 
     logic ui_hit;
     logic [9:0] ui_r;
@@ -89,6 +110,91 @@ module ar_game_overlay (
         end
     endfunction
 
+    function automatic logic [6:0] popup_segments_for_digit(input logic [3:0] digit);
+        begin
+            unique case (digit)
+                4'd0: popup_segments_for_digit = 7'b1111110;
+                4'd1: popup_segments_for_digit = 7'b0110000;
+                4'd2: popup_segments_for_digit = 7'b1101101;
+                4'd3: popup_segments_for_digit = 7'b1111001;
+                4'd4: popup_segments_for_digit = 7'b0110011;
+                4'd5: popup_segments_for_digit = 7'b1011011;
+                4'd6: popup_segments_for_digit = 7'b1011111;
+                4'd7: popup_segments_for_digit = 7'b1110000;
+                4'd8: popup_segments_for_digit = 7'b1111111;
+                4'd9: popup_segments_for_digit = 7'b1111011;
+                default: popup_segments_for_digit = 7'b0000001;
+            endcase
+        end
+    endfunction
+
+    function automatic logic popup_digit_pixel(
+        input logic [3:0] digit,
+        input logic [9:0] x,
+        input logic [9:0] y,
+        input int origin_x,
+        input int origin_y
+    );
+        logic [6:0] seg;
+        int lx;
+        int ly;
+        logic a;
+        logic b;
+        logic c;
+        logic d;
+        logic e;
+        logic f;
+        logic g;
+        int xi;
+        int yi;
+        begin
+            xi = x;
+            yi = y;
+            lx = xi - origin_x;
+            ly = yi - origin_y;
+            seg = popup_segments_for_digit(digit);
+
+            a = seg[6] && (ly >= 0)  && (ly < 2)  && (lx >= 2)  && (lx < 10);
+            b = seg[5] && (ly >= 2)  && (ly < 9)  && (lx >= 10) && (lx < 12);
+            c = seg[4] && (ly >= 9)  && (ly < 16) && (lx >= 10) && (lx < 12);
+            d = seg[3] && (ly >= 16) && (ly < 18) && (lx >= 2)  && (lx < 10);
+            e = seg[2] && (ly >= 9)  && (ly < 16) && (lx >= 0)  && (lx < 2);
+            f = seg[1] && (ly >= 2)  && (ly < 9)  && (lx >= 0)  && (lx < 2);
+            g = seg[0] && (ly >= 8)  && (ly < 10) && (lx >= 2)  && (lx < 10);
+
+            popup_digit_pixel = (xi >= origin_x) && (xi < origin_x + POPUP_DIGIT_W) &&
+                                (yi >= origin_y) && (yi < origin_y + POPUP_DIGIT_H) &&
+                                (a || b || c || d || e || f || g);
+        end
+    endfunction
+
+    function automatic logic popup_sign_pixel(
+        input logic negative,
+        input logic [9:0] x,
+        input logic [9:0] y,
+        input int origin_x,
+        input int origin_y
+    );
+        int lx;
+        int ly;
+        logic horizontal;
+        logic vertical;
+        int xi;
+        int yi;
+        begin
+            xi = x;
+            yi = y;
+            lx = xi - origin_x;
+            ly = yi - origin_y;
+            horizontal = (lx >= 2) && (lx < 10) && (ly >= 8) && (ly < 10);
+            vertical = !negative && (lx >= 5) && (lx < 7) && (ly >= 5) && (ly < 13);
+
+            popup_sign_pixel = (xi >= origin_x) && (xi < origin_x + POPUP_DIGIT_W) &&
+                               (yi >= origin_y) && (yi < origin_y + POPUP_DIGIT_H) &&
+                               (horizontal || vertical);
+        end
+    endfunction
+
     function automatic logic signed [11:0] desc_x(input logic [31:0] desc);
         desc_x = $signed(desc[27:16]);
     endfunction
@@ -102,6 +208,37 @@ module ar_game_overlay (
     assign score_bcd = bin_to_bcd4(score_value);
     assign effect_event_x = $signed(effect_event_pio[25:14]);
     assign effect_event_y = $signed(effect_event_pio[13:2]);
+    assign frame_tick = (draw_x == 10'd0) && (draw_y == 10'd0);
+
+    assign popup_tens = popup_negative ? 4'd3 :
+                        ((popup_class >= 2'd2) ? 4'd2 : 4'd1);
+    assign popup_ones = popup_negative ? 4'd0 :
+                        (popup_class[0] ? 4'd5 : 4'd0);
+
+    assign popup_body_hit = popup_active &&
+        (popup_sign_pixel(popup_negative, draw_x, draw_y,
+                          int'(popup_x) - 24,
+                          int'(popup_y) - 24 - int'(popup_age)) ||
+         popup_digit_pixel(popup_tens, draw_x, draw_y,
+                           int'(popup_x) - 10,
+                           int'(popup_y) - 24 - int'(popup_age)) ||
+         popup_digit_pixel(popup_ones, draw_x, draw_y,
+                           int'(popup_x) - 10 + POPUP_DIGIT_STEP,
+                           int'(popup_y) - 24 - int'(popup_age)));
+
+    assign popup_shadow_hit = popup_active &&
+        (popup_sign_pixel(popup_negative, draw_x, draw_y,
+                          int'(popup_x) - 22,
+                          int'(popup_y) - 22 - int'(popup_age)) ||
+         popup_digit_pixel(popup_tens, draw_x, draw_y,
+                           int'(popup_x) - 8,
+                           int'(popup_y) - 22 - int'(popup_age)) ||
+         popup_digit_pixel(popup_ones, draw_x, draw_y,
+                           int'(popup_x) - 8 + POPUP_DIGIT_STEP,
+                           int'(popup_y) - 22 - int'(popup_age))) &&
+        !popup_body_hit;
+
+    assign popup_hit = popup_body_hit || popup_shadow_hit;
 
     always_ff @(posedge clk or posedge reset) begin
         if (reset) begin
@@ -158,6 +295,33 @@ module ar_game_overlay (
         end
     end
 
+    always_ff @(posedge clk or posedge reset) begin
+        if (reset) begin
+            popup_active <= 1'b0;
+            popup_negative <= 1'b0;
+            popup_class <= 2'd0;
+            popup_age <= 6'd0;
+            popup_x <= 12'sd0;
+            popup_y <= 12'sd0;
+        end else if (!overlay_enable || (game_state != 2'd1)) begin
+            popup_active <= 1'b0;
+            popup_age <= 6'd0;
+        end else if (effect_pulse) begin
+            popup_active <= 1'b1;
+            popup_negative <= (effect_event_pio[28:26] == FRUIT_BOMB);
+            popup_class <= effect_event_pio[1:0];
+            popup_age <= 6'd0;
+            popup_x <= effect_event_x;
+            popup_y <= effect_event_y;
+        end else if (frame_tick && popup_active) begin
+            if (popup_age >= POPUP_AGE_LAST) begin
+                popup_active <= 1'b0;
+            end else begin
+                popup_age <= popup_age + 6'd1;
+            end
+        end
+    end
+
     always_comb begin
         effect_start = '0;
 
@@ -188,7 +352,7 @@ module ar_game_overlay (
                 .clk            (clk),
                 .reset          (reset),
                 .clear          (!overlay_enable),
-                .frame_tick     ((draw_x == 10'd0) && (draw_y == 10'd0)),
+                .frame_tick     (frame_tick),
                 .start_trigger  (effect_start[fruit_i]),
                 .start_type     (effect_event_pio[28:26]),
                 .start_x        (effect_event_x),
@@ -257,10 +421,40 @@ module ar_game_overlay (
                 end
             end
 
+            if (popup_hit) begin
+                next_r = popup_r[9:2];
+                next_g = popup_g[9:2];
+                next_b = popup_b[9:2];
+            end
+
             if (ui_hit) begin
                 next_r = ui_r[9:2];
                 next_g = ui_g[9:2];
                 next_b = ui_b[9:2];
+            end
+        end
+    end
+
+    always_comb begin
+        popup_r = 10'h000;
+        popup_g = 10'h000;
+        popup_b = 10'h000;
+
+        if (popup_shadow_hit) begin
+            popup_r = 10'h040;
+            popup_g = 10'h030;
+            popup_b = 10'h010;
+        end
+
+        if (popup_body_hit) begin
+            if (popup_negative) begin
+                popup_r = 10'h3FF;
+                popup_g = 10'h070;
+                popup_b = 10'h050;
+            end else begin
+                popup_r = 10'h3FF;
+                popup_g = 10'h340;
+                popup_b = 10'h060;
             end
         end
     end
