@@ -1,0 +1,38 @@
+#include <stdio.h>
+
+#include "driver_ov2640_basic.h"
+
+int main(void)
+{
+    printf("OV2640 VGA bring-up starting\r\n");
+
+    if (ov2640_basic_init() != 0)
+    {
+        printf("OV2640 init failed\r\n");
+        while (1)
+        {
+        }
+    }
+
+    if (ov2640_basic_set_rgb565_mode() != 0)
+    {
+        printf("OV2640 RGB565 mode failed\r\n");
+        while (1)
+        {
+        }
+    }
+
+    if (ov2640_basic_set_image_resolution(OV2640_IMAGE_RESOLUTION_QVGA) != 0)
+    {
+        printf("OV2640 QVGA resolution failed\r\n");
+        while (1)
+        {
+        }
+    }
+
+    printf("OV2640 configured: RGB565 QVGA 320x240\r\n");
+
+    while (1)
+    {
+    }
+}

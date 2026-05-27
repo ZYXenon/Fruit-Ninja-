@@ -1,0 +1,31 @@
+	component project_soc is
+		port (
+			cam_ctrl_export                               : out   std_logic_vector(1 downto 0);                     -- export
+			clk_clk                                       : in    std_logic                     := 'X';             -- clk
+			effect_event_pio_external_connection_export   : out   std_logic_vector(31 downto 0);                    -- export
+			frame_counter_pio_external_connection_export  : in    std_logic_vector(31 downto 0) := (others => 'X'); -- export
+			fruit0_desc_pio_external_connection_export    : out   std_logic_vector(31 downto 0);                    -- export
+			fruit1_desc_pio_external_connection_export    : out   std_logic_vector(31 downto 0);                    -- export
+			fruit2_desc_pio_external_connection_export    : out   std_logic_vector(31 downto 0);                    -- export
+			fruit3_desc_pio_external_connection_export    : out   std_logic_vector(31 downto 0);                    -- export
+			game_ctrl_pio_external_connection_export      : out   std_logic_vector(31 downto 0);                    -- export
+			i2c_0_i2c_serial_sda_in                       : in    std_logic                     := 'X';             -- sda_in
+			i2c_0_i2c_serial_scl_in                       : in    std_logic                     := 'X';             -- scl_in
+			i2c_0_i2c_serial_sda_oe                       : out   std_logic;                                        -- sda_oe
+			i2c_0_i2c_serial_scl_oe                       : out   std_logic;                                        -- scl_oe
+			keys_export                                   : in    std_logic_vector(3 downto 0)  := (others => 'X'); -- export
+			reset_reset_n                                 : in    std_logic                     := 'X';             -- reset_n
+			sdram_clk_clk                                 : out   std_logic;                                        -- clk
+			sdram_wire_addr                               : out   std_logic_vector(12 downto 0);                    -- addr
+			sdram_wire_ba                                 : out   std_logic_vector(1 downto 0);                     -- ba
+			sdram_wire_cas_n                              : out   std_logic;                                        -- cas_n
+			sdram_wire_cke                                : out   std_logic;                                        -- cke
+			sdram_wire_cs_n                               : out   std_logic;                                        -- cs_n
+			sdram_wire_dq                                 : inout std_logic_vector(31 downto 0) := (others => 'X'); -- dq
+			sdram_wire_dqm                                : out   std_logic_vector(3 downto 0);                     -- dqm
+			sdram_wire_ras_n                              : out   std_logic;                                        -- ras_n
+			sdram_wire_we_n                               : out   std_logic;                                        -- we_n
+			tracker_status_pio_external_connection_export : in    std_logic_vector(31 downto 0) := (others => 'X')  -- export
+		);
+	end component project_soc;
+

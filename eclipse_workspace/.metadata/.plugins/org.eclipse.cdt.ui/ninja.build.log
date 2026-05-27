@@ -1,0 +1,9 @@
+11:13:22 **** Incremental Build of configuration Nios II for project ninja ****
+make all 
+Info: Building ../ninja_bsp/
+F:/Quartus18_1/nios2eds/bin/gnu/H-x86_64-mingw32/bin/make --no-print-directory -C ../ninja_bsp/
+[BSP build complete]
+[ninja build complete]
+
+11:13:23 Build Finished (took 638ms)
+
