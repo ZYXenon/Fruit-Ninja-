@@ -57,11 +57,17 @@ module final_top (
     localparam logic ENABLE_GAME_OVERLAY = 1'b1;
     localparam logic ENABLE_PROP_TRACKER = 1'b1;
     localparam logic ENABLE_KNIFE_SPRITE = 1'b1;
-    localparam logic ENABLE_KNIFE_TRAIL = 1'b0;
+    localparam logic ENABLE_KNIFE_TRAIL = 1'b1;
     localparam logic ENABLE_PROP_BBOX_DEBUG = 1'b0;
     localparam logic USE_STATIC_BACKGROUND = 1'b1;
     localparam logic SHOW_CAMERA_BACKGROUND = 1'b1;
     localparam logic SHOW_TRACKER_MASK = 1'b1;
+    localparam int PROP_SMOOTH_FRAC_BITS = 4;
+    localparam int PROP_SMOOTH_SHIFT = 2;
+    localparam logic [9:0] KNIFE_MIN_X = 10'd24;
+    localparam logic [9:0] KNIFE_MAX_X = 10'd615;
+    localparam logic [9:0] KNIFE_MIN_Y = 10'd24;
+    localparam logic [9:0] KNIFE_MAX_Y = 10'd455;
 
     logic        reset;
     logic [1:0]  cam_ctrl;
@@ -204,6 +210,18 @@ module final_top (
     logic [9:0]  prop_result_max_x_cam;
     logic [9:0]  prop_result_max_y_cam;
     logic [15:0] prop_result_count_cam;
+    logic        prop_smooth_valid_cam;
+    logic        prop_smooth_initialized_cam;
+    logic [9:0]  prop_smooth_x_cam;
+    logic [9:0]  prop_smooth_y_cam;
+    logic [9:0]  prop_target_x_cam;
+    logic [9:0]  prop_target_y_cam;
+    logic signed [15:0] prop_smooth_x_fp_cam;
+    logic signed [15:0] prop_smooth_y_fp_cam;
+    logic signed [15:0] prop_target_x_fp_cam;
+    logic signed [15:0] prop_target_y_fp_cam;
+    logic signed [15:0] prop_next_smooth_x_fp_cam;
+    logic signed [15:0] prop_next_smooth_y_fp_cam;
     logic        prop_bbox_valid;
     logic [9:0]  prop_bbox_min_x;
     logic [9:0]  prop_bbox_min_y;
@@ -238,6 +256,14 @@ module final_top (
     assign i2c_sda_in = CAM_SIOD;
     assign i2c_scl_in = CAM_SIOC;
     assign color_debug_mode = 3'b000;
+
+    function automatic logic [9:0] smooth_fp_to_coord(input logic signed [15:0] value);
+        logic signed [15:0] rounded;
+        begin
+            rounded = value + (16'sd1 <<< (PROP_SMOOTH_FRAC_BITS - 1));
+            smooth_fp_to_coord = rounded[13:PROP_SMOOTH_FRAC_BITS];
+        end
+    endfunction
     assign debug_cam_backpressure = cam_fifo_wr_valid && !cam_fifo_wr_ready;
     assign debug_vga_active = VGA_BLANK_N && (draw_x < 10'd640) && (draw_y < 10'd480);
     assign debug_vga_visible_miss = debug_vga_active && sram_display_enable && !vga_pixel_valid;
@@ -613,6 +639,31 @@ module final_top (
         end
     endgenerate
 
+    always_comb begin
+        if (prop_x_vga < KNIFE_MIN_X) begin
+            prop_target_x_cam = KNIFE_MIN_X;
+        end else if (prop_x_vga > KNIFE_MAX_X) begin
+            prop_target_x_cam = KNIFE_MAX_X;
+        end else begin
+            prop_target_x_cam = prop_x_vga;
+        end
+
+        if (prop_y_vga < KNIFE_MIN_Y) begin
+            prop_target_y_cam = KNIFE_MIN_Y;
+        end else if (prop_y_vga > KNIFE_MAX_Y) begin
+            prop_target_y_cam = KNIFE_MAX_Y;
+        end else begin
+            prop_target_y_cam = prop_y_vga;
+        end
+    end
+
+    assign prop_target_x_fp_cam = $signed({2'b00, prop_target_x_cam, {PROP_SMOOTH_FRAC_BITS{1'b0}}});
+    assign prop_target_y_fp_cam = $signed({2'b00, prop_target_y_cam, {PROP_SMOOTH_FRAC_BITS{1'b0}}});
+    assign prop_next_smooth_x_fp_cam = prop_smooth_x_fp_cam +
+                                       ((prop_target_x_fp_cam - prop_smooth_x_fp_cam) >>> PROP_SMOOTH_SHIFT);
+    assign prop_next_smooth_y_fp_cam = prop_smooth_y_fp_cam +
+                                       ((prop_target_y_fp_cam - prop_smooth_y_fp_cam) >>> PROP_SMOOTH_SHIFT);
+
     always_ff @(posedge CAM_PCLK or posedge reset) begin
         if (reset) begin
             tracker_result_pending <= 1'b0;
@@ -627,6 +678,12 @@ module final_top (
             prop_result_max_x_cam <= 10'd0;
             prop_result_max_y_cam <= 10'd0;
             prop_result_count_cam <= 16'd0;
+            prop_smooth_valid_cam <= 1'b0;
+            prop_smooth_initialized_cam <= 1'b0;
+            prop_smooth_x_cam <= 10'd0;
+            prop_smooth_y_cam <= 10'd0;
+            prop_smooth_x_fp_cam <= 16'sd0;
+            prop_smooth_y_fp_cam <= 16'sd0;
         end else if (!ENABLE_PROP_TRACKER) begin
             tracker_result_pending <= 1'b0;
             tracker_result_delay <= 6'd0;
@@ -640,6 +697,12 @@ module final_top (
             prop_result_max_x_cam <= 10'd0;
             prop_result_max_y_cam <= 10'd0;
             prop_result_count_cam <= 16'd0;
+            prop_smooth_valid_cam <= 1'b0;
+            prop_smooth_initialized_cam <= 1'b0;
+            prop_smooth_x_cam <= 10'd0;
+            prop_smooth_y_cam <= 10'd0;
+            prop_smooth_x_fp_cam <= 16'sd0;
+            prop_smooth_y_fp_cam <= 16'sd0;
         end else begin
             tracker_result_ready <= 1'b0;
 
@@ -658,6 +721,31 @@ module final_top (
                     prop_result_max_x_cam <= prop_max_x_vga;
                     prop_result_max_y_cam <= prop_max_y_vga;
                     prop_result_count_cam <= prop_count_vga;
+
+                    if (prop_valid_vga) begin
+                        prop_smooth_valid_cam <= 1'b1;
+
+                        if (!prop_smooth_initialized_cam) begin
+                            prop_smooth_initialized_cam <= 1'b1;
+                            prop_smooth_x_fp_cam <= prop_target_x_fp_cam;
+                            prop_smooth_y_fp_cam <= prop_target_y_fp_cam;
+                            prop_smooth_x_cam <= prop_target_x_cam;
+                            prop_smooth_y_cam <= prop_target_y_cam;
+                        end else begin
+                            prop_smooth_x_fp_cam <= prop_next_smooth_x_fp_cam;
+                            prop_smooth_y_fp_cam <= prop_next_smooth_y_fp_cam;
+                            prop_smooth_x_cam <= smooth_fp_to_coord(prop_next_smooth_x_fp_cam);
+                            prop_smooth_y_cam <= smooth_fp_to_coord(prop_next_smooth_y_fp_cam);
+                        end
+                    end else begin
+                        prop_smooth_valid_cam <= 1'b0;
+                        prop_smooth_initialized_cam <= 1'b0;
+                        prop_smooth_x_cam <= 10'd0;
+                        prop_smooth_y_cam <= 10'd0;
+                        prop_smooth_x_fp_cam <= 16'sd0;
+                        prop_smooth_y_fp_cam <= 16'sd0;
+                    end
+
                     tracker_sample_toggle_vga <= ~tracker_sample_toggle_vga;
                 end else begin
                     tracker_result_delay <= tracker_result_delay - 6'd1;
@@ -679,9 +767,9 @@ module final_top (
             if (tracker_sample_50) begin
                 tracker_status_pio <= {
                     tracker_sample_sync[2],
-                    prop_result_valid_cam,
-                    prop_result_x_cam,
-                    prop_result_y_cam,
+                    prop_smooth_valid_cam,
+                    prop_smooth_x_cam,
+                    prop_smooth_y_cam,
                     prop_result_count_cam[15:6]
                 };
             end
@@ -711,8 +799,8 @@ module final_top (
             prop_bbox_max_x <= 10'd0;
             prop_bbox_max_y <= 10'd0;
             knife_center_valid <= 1'b0;
-            knife_center_x <= 10'd24;
-            knife_center_y <= 10'd24;
+            knife_center_x <= KNIFE_MIN_X;
+            knife_center_y <= KNIFE_MIN_Y;
             prop_miss_frames <= 4'd0;
         end else if (!ENABLE_PROP_TRACKER) begin
             prop_bbox_valid <= 1'b0;
@@ -721,35 +809,21 @@ module final_top (
             prop_bbox_max_x <= 10'd0;
             prop_bbox_max_y <= 10'd0;
             knife_center_valid <= 1'b0;
-            knife_center_x <= 10'd24;
-            knife_center_y <= 10'd24;
+            knife_center_x <= KNIFE_MIN_X;
+            knife_center_y <= KNIFE_MIN_Y;
             prop_miss_frames <= 4'd0;
         end else if (tracker_result_ready_vga) begin
             prop_bbox_valid <= prop_result_valid_cam;
 
-            if (prop_result_valid_cam) begin
+            if (prop_smooth_valid_cam) begin
                 knife_center_valid <= 1'b1;
                 prop_miss_frames <= 4'd0;
                 prop_bbox_min_x <= prop_result_min_x_cam;
                 prop_bbox_min_y <= prop_result_min_y_cam;
                 prop_bbox_max_x <= prop_result_max_x_cam;
                 prop_bbox_max_y <= prop_result_max_y_cam;
-
-                if (prop_result_x_cam < 10'd24) begin
-                    knife_center_x <= 10'd24;
-                end else if (prop_result_x_cam > 10'd615) begin
-                    knife_center_x <= 10'd615;
-                end else begin
-                    knife_center_x <= prop_result_x_cam;
-                end
-
-                if (prop_result_y_cam < 10'd24) begin
-                    knife_center_y <= 10'd24;
-                end else if (prop_result_y_cam > 10'd455) begin
-                    knife_center_y <= 10'd455;
-                end else begin
-                    knife_center_y <= prop_result_y_cam;
-                end
+                knife_center_x <= prop_smooth_x_cam;
+                knife_center_y <= prop_smooth_y_cam;
             end else begin
                 knife_center_valid <= 1'b0;
                 prop_miss_frames <= 4'd0;

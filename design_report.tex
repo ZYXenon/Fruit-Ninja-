@@ -1,0 +1,158 @@
+\documentclass[10pt]{article}
+\usepackage[margin=0.55in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\setlist{nosep,leftmargin=*}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\renewcommand{\arraystretch}{1.08}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  backgroundcolor=\color{gray!6}
+}
+
+\title{\vspace{-1.5em}Design Report: FPGA AR Fruit Ninja}
+\author{DE2-115 / OV2640 / Nios II Project}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-1.4em}
+
+\section{System Overview and Block Diagram Prompt}
+
+This project implements an augmented-reality Fruit Ninja game on the Terasic DE2-115 FPGA board. An OV2640 camera module provides a live RGB565 video stream through an 8-bit DVP interface. The FPGA captures the stream, stores frames in an external frame buffer, detects a bright green hand-held prop, draws the prop as a virtual knife, overlays fruit sprites and UI elements, and outputs the final image to a 640$\times$480 VGA display. A Nios II processor runs the game state machine, fruit physics, scoring, and OV2640 configuration code; SystemVerilog hardware performs pixel-rate capture, buffering, color tracking, rendering, and VGA timing.
+
+\subsection{Prompt for Generating the Detailed Block Diagram}
+
+Use the following prompt to generate the required detailed block diagram image:
+
+\begin{lstlisting}
+Create a clean detailed hardware block diagram for an FPGA AR Fruit Ninja system on a Terasic DE2-115 board. Use a left-to-right dataflow style with clearly separated clock domains and a distinct Avalon-MM subsystem box.
+
+External devices:
+1. OV2640 camera module on GPIO, with DVP signals CAM_D[7:0], CAM_PCLK, CAM_HREF, CAM_VSYNC and control signals CAM_SIOC, CAM_SIOD, CAM_PWDN, CAM_RESET_N.
+2. VGA monitor, 640x480 at 60 Hz, with VGA_R/G/B[7:0], VGA_HS, VGA_VS, VGA_CLK, VGA_BLANK_N, VGA_SYNC_N.
+3. DE2-115 external SRAM used as the real-time video frame buffer, with SRAM_ADDR[19:0], SRAM_DQ[15:0], CE_N, OE_N, WE_N, UB_N, LB_N.
+4. DE2-115 SDRAM connected to the Nios II Avalon subsystem for program/data memory.
+5. KEY[3:0] push buttons for reset, start, and debug/spawn control.
+
+Pixel/video path:
+OV2640 DVP -> ov2640_capture in CAM_PCLK domain. This block combines two 8-bit camera bytes into one RGB565 pixel and adds an SOF flag, producing an 18-bit stream {sof, reserved, rgb565}. Then show async_fifo crossing from CAM_PCLK to VGA_CLK. Then show sram_frame_writer, which writes QVGA 320x240 RGB565 frames into a triple-buffer layout in external SRAM: frame0 base 0, frame1 base 76800 words, frame2 base 153600 words. Then show sram_arbiter, shared by the writer and the VGA reader. Then show vga_framebuffer_reader, which reads the selected frame, uses two 320-pixel line buffers, and scales QVGA to VGA by mapping source_x = draw_x[9:1], source_y = draw_y[9:1]. Then show RGB565-to-VGA RGB expansion and base background selection.
+
+Tracking path:
+Tap the camera RGB565 stream and feed color_prop_tracker. It thresholds bright green pixels with RGB565 limits and green dominance tests, splits the image into four horizontal zones, accumulates per-zone bounding boxes and counts, chooses the strongest valid zone, and outputs prop_valid, center x/y, bbox min/max, and count. Then show smoothing/clamping logic that limits the knife center to x=24..615 and y=24..455 and low-pass filters the center.
+
+Rendering path:
+Show VGA_controller generating DrawX/DrawY, HS/VS/blank. Feed DrawX/DrawY, background RGB, and Nios game PIO registers into ar_game_overlay. Inside this block show fruit_renderer plus fruit_sprite_rom, slice_effect_state plus slice_effect_renderer, and ui_renderer. After ar_game_overlay, show knife_trail_renderer and knife_renderer plus knife_sprite_rom, producing final VGA_R/G/B.
+
+Avalon-MM / Nios II subsystem:
+Draw a Platform Designer / project_soc box connected by Avalon-MM interconnect to these IP blocks and address map:
+- onchip_memory2_0, base 0x00000000, span 0x10, small on-chip memory.
+- effect_event_pio, base 0x00000020, span 0x10, 32-bit output from Nios to renderer for slice/bomb popup events.
+- fruit3_desc_pio, base 0x00000030, span 0x10, 32-bit output descriptor for fruit slot 3.
+- i2c_0, base 0x00000040, span 0x40, Avalon I2C master used as OV2640 SCCB configuration bus.
+- fruit2_desc_pio, base 0x00000080, span 0x10, 32-bit output descriptor for fruit slot 2.
+- fruit1_desc_pio, base 0x00000090, span 0x10, 32-bit output descriptor for fruit slot 1.
+- fruit0_desc_pio, base 0x000000A0, span 0x10, 32-bit output descriptor for fruit slot 0.
+- game_ctrl_pio, base 0x000000B0, span 0x10, 32-bit output with commit toggle, overlay enable, game state, bomb hits, score, and timer digits.
+- tracker_status_pio, base 0x000000C0, span 0x10, 32-bit input from hardware to Nios with sample toggle, valid bit, knife x, knife y, and count summary.
+- frame_counter_pio, base 0x000000D0, span 0x10, 32-bit input incremented once per VGA frame.
+- keys_pio, base 0x000000E0, span 0x10, 4-bit input for KEY buttons.
+- cam_ctrl_pio, base 0x000000F0, span 0x10, 2-bit output controlling CAM_PWDN and CAM_RESET_N.
+- sdram_pll, base 0x00000100, span 0x10, generates SDRAM clock.
+- sysid_qsys_0, base 0x00000118, span 0x08, system ID.
+- jtag_uart_0, base 0x00000120, span 0x08, Nios console/debug.
+- sdram, base 0x10000000, span 128 MB, Avalon SDRAM controller for Nios program/data memory.
+
+Synchronization:
+Label clock domains: 50 MHz system/Nios clock, CAM_PCLK camera clock, VGA pixel clock around 25 MHz, and SDRAM clock from PLL. Highlight async FIFO for pixel data, toggle synchronizers for frame ticks and tracker samples, and commit-toggle registers for Nios-to-renderer updates.
+\end{lstlisting}
+
+\section{Avalon IP and Address Allocation}
+
+The Platform Designer subsystem \texttt{project\_soc} contains a Nios II Gen2 processor and standard Avalon-MM peripherals. The Nios II software configures the camera through the Avalon I2C IP, reads hardware status through input PIOs, and publishes game/rendering state through output PIOs. The large Avalon SDRAM controller is used by the Nios II BSP as program and data memory, while the real-time camera frame buffer is implemented with the board's external SRAM through custom SystemVerilog logic for deterministic pixel access.
+
+\begin{center}
+\small
+\begin{tabular}{lll p{0.43\linewidth}}
+\toprule
+IP / Register & Base & Width / Span & Function \\
+\midrule
+\texttt{onchip\_memory2\_0} & 0x00 & 16B / 0x10 & Small Avalon on-chip RAM generated with the Nios system. \\
+\texttt{effect\_event\_pio} & 0x20 & 32b / 0x10 & One-shot slice/bomb event: toggle, slot, type, position, popup class. \\
+\texttt{fruit3\_desc\_pio} & 0x30 & 32b / 0x10 & Fruit slot 3 descriptor. \\
+\texttt{i2c\_0} & 0x40 & 0x40 & Avalon I2C master used as OV2640 SCCB register bus. \\
+\texttt{fruit2\_desc\_pio} & 0x80 & 32b / 0x10 & Fruit slot 2 descriptor. \\
+\texttt{fruit1\_desc\_pio} & 0x90 & 32b / 0x10 & Fruit slot 1 descriptor. \\
+\texttt{fruit0\_desc\_pio} & 0xA0 & 32b / 0x10 & Fruit slot 0 descriptor. \\
+\texttt{game\_ctrl\_pio} & 0xB0 & 32b / 0x10 & Overlay enable, commit toggle, state, score, timer, bomb count. \\
+\texttt{tracker\_status\_pio} & 0xC0 & 32b / 0x10 & Hardware-to-Nios prop status: valid, knife x/y, count summary. \\
+\texttt{frame\_counter\_pio} & 0xD0 & 32b / 0x10 & Increments once per VGA frame; paces the C game loop. \\
+\texttt{keys\_pio} & 0xE0 & 4b / 0x10 & KEY button input. \\
+\texttt{cam\_ctrl\_pio} & 0xF0 & 2b / 0x10 & Camera PWDN and RESET\_N control. \\
+\texttt{sdram\_pll} & 0x100 & 0x10 & PLL/control interface for SDRAM clocking. \\
+\texttt{sysid\_qsys\_0} & 0x118 & 0x08 & Build/system identification. \\
+\texttt{jtag\_uart\_0} & 0x120 & 0x08 & Nios console and debug channel. \\
+\texttt{sdram} & 0x10000000 & 128 MB & Nios II program/data memory through Avalon SDRAM controller. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Three Main Hardware Modules}
+
+\subsection{Camera Capture and Frame Buffer Pipeline}
+
+This path converts the OV2640 byte stream into a stable VGA background. \texttt{ov2640\_capture} runs in the \texttt{CAM\_PCLK} domain. When \texttt{CAM\_HREF} is active, it stores the first byte of each RGB565 pixel and emits one 18-bit FIFO word after receiving the second byte. Bit 17 marks the first pixel after a VSYNC frame gap, allowing downstream logic to realign frame writes. If the asynchronous FIFO is full, the block raises overflow/debug counters and drops the rest of the current frame rather than corrupting the frame buffer.
+
+The \texttt{async\_fifo} crosses from \texttt{CAM\_PCLK} to the VGA pixel clock. \texttt{sram\_frame\_writer} writes 320$\times$240 RGB565 frames into a triple-buffer SRAM layout. Each frame contains 76,800 16-bit words; frame bases are 0, 76,800, and 153,600. On frame completion, it publishes \texttt{pending\_frame}/\texttt{pending\_valid}. \texttt{vga\_framebuffer\_reader} accepts a pending frame only at a new VGA frame, reads one or two source lines into M10K line buffers, and performs 2$\times$ scaling by using \texttt{draw\_x[9:1]} and \texttt{draw\_y[9:1]} as QVGA coordinates. \texttt{sram\_arbiter} arbitrates read/write requests and drives the external SRAM pins.
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+Module & Main inputs & Main outputs \\
+\midrule
+\texttt{ov2640\_capture} & \texttt{CAM\_D[7:0]}, \texttt{HREF}, \texttt{VSYNC}, \texttt{PCLK} & \texttt{fifo\_wr\_valid}, \texttt{fifo\_wr\_data[17:0]} \\
+\texttt{sram\_frame\_writer} & FIFO stream, \texttt{read\_frame}, \texttt{pending\_consumed} & SRAM write address/data, \texttt{pending\_frame} \\
+\texttt{vga\_framebuffer\_reader} & \texttt{DrawX}, \texttt{DrawY}, pending frame, SRAM read data & RGB565 pixel and valid flag \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Color Prop Tracker}
+
+\texttt{color\_prop\_tracker} performs pixel-rate bright-green prop detection in hardware. Its interface receives \texttt{frame\_start}, \texttt{frame\_end}, \texttt{pix\_valid}, \texttt{pix\_x}, \texttt{pix\_y}, and \texttt{pix\_rgb565}. Configurable thresholds include RGB min/max limits, a green dominance margin, a blue margin, and a minimum pixel count.
+
+For each valid pixel, RGB565 is expanded internally to comparable red, green, and blue magnitudes. A pixel is accepted only if it is inside the min/max range and passes dominance tests such as green greater than red by a margin and green sufficiently stronger than the red-blue sum. The screen is split into four vertical zones; each zone accumulates count and bounding-box min/max coordinates. At the end of a frame, the tracker rejects tiny corner noise and over-large blobs, selects the strongest valid zone, and outputs \texttt{prop\_valid}, \texttt{prop\_x/y}, \texttt{bbox\_min/max}, and \texttt{prop\_count}. Top-level smoothing logic clamps the knife position to the visible area and applies a fixed-point low-pass filter before publishing the position to VGA rendering and to Nios through \texttt{tracker\_status\_pio}.
+
+\subsection{AR Game Overlay Renderer}
+
+\texttt{ar\_game\_overlay} is the main pixel compositor. It receives \texttt{DrawX}, \texttt{DrawY}, \texttt{blank\_n}, the selected background RGB, four fruit descriptors, the global game control word, and the latest effect event word. Each fruit descriptor contains active bit, fruit type, signed x coordinate, and signed y coordinate. The game control word contains a commit toggle, overlay enable, state, bomb hits, score, and timer digits.
+
+The renderer synchronizes the Nios commit toggle in the VGA clock domain so that the four fruit descriptors are latched together instead of halfway through a Nios update. Fruit pixels are generated by \texttt{fruit\_renderer} and sprite ROMs. Slice animations are started by the effect event toggle and maintained by \texttt{slice\_effect\_state}/\texttt{slice\_effect\_renderer}. \texttt{ui\_renderer} draws score, timer, state text, and bomb indicators. After the game overlay, \texttt{knife\_trail\_renderer} draws a motion trail from recent knife centers, and \texttt{knife\_renderer} draws the knife sprite at the smoothed prop location. The final RGB output directly drives the VGA DAC signals.
+
+\section{C Algorithm and Hardware Synchronization}
+
+The Nios II C program first initializes the OV2640 over SCCB/I2C, sets RGB565 output, and configures QVGA resolution. After a short camera stabilization delay, the main loop is paced by \texttt{frame\_counter\_pio}. The software executes at most one game update per VGA frame, which keeps physics, collision checks, and rendering register updates synchronized to the visible display.
+
+Each frame, C reads \texttt{keys\_pio} and \texttt{tracker\_status\_pio}. The tracker status word contains a toggle/sample bit, a valid bit, 10-bit knife x, 10-bit knife y, and a reduced count field. The software compares the current knife position with the previous valid position. If the Manhattan motion exceeds \texttt{BLADE\_CUT\_MIN\_DELTA}, the motion segment becomes an active slice. Collision is tested by sampling this segment against each fruit's ellipse-shaped hit area. This allows fast swipes to hit fruit even if the blade is not exactly inside the sprite center on the current frame.
+
+The game state machine has three states: start screen, playing, and game over. In the playing state, a 16-bit LFSR creates fruit type, horizontal velocity, vertical velocity, and spawn timing. Fruit positions use fixed-point coordinates with four fractional bits. Gravity increments vertical velocity each frame. Normal fruit gives score on hit, missed fruit subtracts score, bombs subtract score and increment the bomb-hit counter, and combo logic adds bonus points when multiple fruits are sliced within a short frame window. The game ends when the timer reaches zero or when three bombs are hit.
+
+After updating state, C writes four fruit descriptor PIOs, writes an effect event PIO if a slice happened, and finally writes \texttt{game\_ctrl\_pio} with a flipped commit toggle. Hardware uses this toggle as a synchronization boundary: descriptor data is considered new only when the toggle changes. This avoids reading a mixture of old and new fruit slots during pixel rendering. In the opposite direction, hardware uses toggle synchronizers for frame ticks and tracker samples crossing into the 50 MHz Nios clock domain. Pixel data uses an asynchronous FIFO because it is multi-bit streaming data crossing from the camera clock to the VGA clock.
+
+\section{Design Rationale}
+
+The main design choice is to keep pixel-rate work in SystemVerilog and frame-rate game rules in C. Hardware modules handle the high-bandwidth tasks: camera byte packing, clock-domain crossing, SRAM frame buffering, color thresholding, sprite ROM lookup, and per-pixel layer priority. Nios II handles control-heavy but low-rate tasks: camera register setup, random spawning, physics, collision, score, timer, and game states. This division makes the system responsive enough for real-time interaction while keeping the game rules easy to adjust before the final demo.
+
+\end{document}
