@@ -45,6 +45,16 @@ module ar_game_overlay (
     logic [3:0]  time_tens;
     logic [3:0]  time_ones;
     logic [15:0] score_bcd;
+    logic [13:0] high_score0;
+    logic [13:0] high_score1;
+    logic [13:0] high_score2;
+    logic [13:0] high_score3;
+    logic [13:0] high_score4;
+    logic [15:0] high_score0_bcd;
+    logic [15:0] high_score1_bcd;
+    logic [15:0] high_score2_bcd;
+    logic [15:0] high_score3_bcd;
+    logic [15:0] high_score4_bcd;
 
     logic [MAX_FRUITS-1:0] fruit_active;
     logic [2:0] fruit_type [0:MAX_FRUITS-1];
@@ -206,6 +216,11 @@ module ar_game_overlay (
     assign commit_pulse = commit_sync[2] ^ commit_sync[1];
     assign effect_pulse = effect_sync[2] ^ effect_sync[1];
     assign score_bcd = bin_to_bcd4(score_value);
+    assign high_score0_bcd = bin_to_bcd4(high_score0);
+    assign high_score1_bcd = bin_to_bcd4(high_score1);
+    assign high_score2_bcd = bin_to_bcd4(high_score2);
+    assign high_score3_bcd = bin_to_bcd4(high_score3);
+    assign high_score4_bcd = bin_to_bcd4(high_score4);
     assign effect_event_x = $signed(effect_event_pio[25:14]);
     assign effect_event_y = $signed(effect_event_pio[13:2]);
     assign frame_tick = (draw_x == 10'd0) && (draw_y == 10'd0);
@@ -258,6 +273,11 @@ module ar_game_overlay (
             score_value <= 14'd0;
             time_tens <= 4'd6;
             time_ones <= 4'd0;
+            high_score0 <= 14'd0;
+            high_score1 <= 14'd0;
+            high_score2 <= 14'd0;
+            high_score3 <= 14'd0;
+            high_score4 <= 14'd0;
 
             for (int i = 0; i < MAX_FRUITS; i = i + 1) begin
                 fruit_active[i] <= 1'b0;
@@ -272,6 +292,11 @@ module ar_game_overlay (
             score_value <= game_ctrl_pio[25:12];
             time_tens <= game_ctrl_pio[11:8];
             time_ones <= game_ctrl_pio[7:4];
+            high_score0 <= fruit0_desc_pio[13:0];
+            high_score1 <= fruit0_desc_pio[29:16];
+            high_score2 <= fruit1_desc_pio[13:0];
+            high_score3 <= fruit1_desc_pio[29:16];
+            high_score4 <= fruit2_desc_pio[13:0];
 
             fruit_active[0] <= fruit0_desc_pio[31];
             fruit_type[0] <= fruit0_desc_pio[30:28];
@@ -393,6 +418,11 @@ module ar_game_overlay (
         .score_ones      (score_bcd[3:0]),
         .time_tens       (time_tens),
         .time_ones       (time_ones),
+        .high_score0_bcd (high_score0_bcd),
+        .high_score1_bcd (high_score1_bcd),
+        .high_score2_bcd (high_score2_bcd),
+        .high_score3_bcd (high_score3_bcd),
+        .high_score4_bcd (high_score4_bcd),
         .ui_hit          (ui_hit),
         .ui_r            (ui_r),
         .ui_g            (ui_g),

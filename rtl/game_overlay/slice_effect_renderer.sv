@@ -82,7 +82,7 @@ module slice_effect_renderer (
     assign radius = 12'd10 + {7'd0, effect_age};
     assign age_ext = {7'd0, effect_age};
     assign age_square = age_ext * age_ext;
-    assign split_offset = 12'd10 + (age_ext << 1);
+    assign split_offset = age_ext << 1;
     assign fall_offset = age_square[13:2];
     assign left_center_x = effect_x - $signed(split_offset);
     assign right_center_x = effect_x + $signed(split_offset);

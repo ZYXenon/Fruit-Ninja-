@@ -10,6 +10,11 @@ module ui_renderer (
     input  logic [3:0] score_ones,
     input  logic [3:0] time_tens,
     input  logic [3:0] time_ones,
+    input  logic [15:0] high_score0_bcd,
+    input  logic [15:0] high_score1_bcd,
+    input  logic [15:0] high_score2_bcd,
+    input  logic [15:0] high_score3_bcd,
+    input  logic [15:0] high_score4_bcd,
 
     output logic       ui_hit,
     output logic [9:0] ui_r,
@@ -20,11 +25,11 @@ module ui_renderer (
     localparam logic [1:0] GAME_START   = 2'd0;
     localparam logic [1:0] GAME_PLAYING = 2'd1;
     localparam logic [1:0] GAME_OVER    = 2'd2;
+    localparam logic [1:0] GAME_HIGHSCORES = 2'd3;
 
     localparam int DIGIT_W = 18;
     localparam int DIGIT_H = 28;
     localparam int DIGIT_STEP = 22;
-    localparam int TEXT_SCALE = 4;
     localparam int TEXT_CELL_W = 6;
     localparam int TEXT_CELL_H = 7;
     localparam int SHADOW_OFFSET = 3;
@@ -50,6 +55,11 @@ module ui_renderer (
     localparam logic [5:0] CH_Y = 6'd18;
     localparam logic [5:0] CH_1 = 6'd19;
     localparam logic [5:0] CH_2 = 6'd20;
+    localparam logic [5:0] CH_B = 6'd21;
+    localparam logic [5:0] CH_H = 6'd22;
+    localparam logic [5:0] CH_L = 6'd23;
+    localparam logic [5:0] CH_3 = 6'd24;
+    localparam logic [5:0] CH_W = 6'd25;
 
     logic hud_bar;
     logic panel_hit;
@@ -59,10 +69,14 @@ module ui_renderer (
     logic life_empty_hit;
     logic life_full_hit;
     logic final_score_hit;
+    logic high_score_hit;
+    logic title_hit;
     logic text_hit;
     logic score_shadow_hit;
     logic timer_shadow_hit;
     logic final_score_shadow_hit;
+    logic high_score_shadow_hit;
+    logic title_shadow_hit;
     logic text_shadow_hit;
     logic shadow_hit;
 
@@ -233,6 +247,30 @@ module ui_renderer (
                     3'd4: glyph_row = 5'b00100; 3'd5: glyph_row = 5'b00100;
                     3'd6: glyph_row = 5'b00100; default: glyph_row = 5'b00000;
                 endcase
+                CH_W: unique case (row)
+                    3'd0: glyph_row = 5'b10001; 3'd1: glyph_row = 5'b10001;
+                    3'd2: glyph_row = 5'b10001; 3'd3: glyph_row = 5'b10101;
+                    3'd4: glyph_row = 5'b10101; 3'd5: glyph_row = 5'b11011;
+                    3'd6: glyph_row = 5'b10001; default: glyph_row = 5'b00000;
+                endcase
+                CH_B: unique case (row)
+                    3'd0: glyph_row = 5'b11110; 3'd1: glyph_row = 5'b10001;
+                    3'd2: glyph_row = 5'b10001; 3'd3: glyph_row = 5'b11110;
+                    3'd4: glyph_row = 5'b10001; 3'd5: glyph_row = 5'b10001;
+                    3'd6: glyph_row = 5'b11110; default: glyph_row = 5'b00000;
+                endcase
+                CH_H: unique case (row)
+                    3'd0: glyph_row = 5'b10001; 3'd1: glyph_row = 5'b10001;
+                    3'd2: glyph_row = 5'b10001; 3'd3: glyph_row = 5'b11111;
+                    3'd4: glyph_row = 5'b10001; 3'd5: glyph_row = 5'b10001;
+                    3'd6: glyph_row = 5'b10001; default: glyph_row = 5'b00000;
+                endcase
+                CH_L: unique case (row)
+                    3'd0: glyph_row = 5'b10000; 3'd1: glyph_row = 5'b10000;
+                    3'd2: glyph_row = 5'b10000; 3'd3: glyph_row = 5'b10000;
+                    3'd4: glyph_row = 5'b10000; 3'd5: glyph_row = 5'b10000;
+                    3'd6: glyph_row = 5'b11111; default: glyph_row = 5'b00000;
+                endcase
                 CH_1: unique case (row)
                     3'd0: glyph_row = 5'b00100; 3'd1: glyph_row = 5'b01100;
                     3'd2: glyph_row = 5'b00100; 3'd3: glyph_row = 5'b00100;
@@ -245,24 +283,29 @@ module ui_renderer (
                     3'd4: glyph_row = 5'b00100; 3'd5: glyph_row = 5'b01000;
                     3'd6: glyph_row = 5'b11111; default: glyph_row = 5'b00000;
                 endcase
+                CH_3: unique case (row)
+                    3'd0: glyph_row = 5'b11110; 3'd1: glyph_row = 5'b00001;
+                    3'd2: glyph_row = 5'b00001; 3'd3: glyph_row = 5'b01110;
+                    3'd4: glyph_row = 5'b00001; 3'd5: glyph_row = 5'b00001;
+                    3'd6: glyph_row = 5'b11110; default: glyph_row = 5'b00000;
+                endcase
                 default: glyph_row = 5'b00000;
             endcase
         end
     endfunction
 
-    function automatic logic [5:0] message_char(input logic [2:0] msg, input int index);
+    function automatic logic [5:0] message_char(input logic [3:0] msg, input int index);
         begin
             message_char = CH_SPACE;
 
             unique case (msg)
-                3'd0: unique case (index) // AR FRUIT NINJA
-                    0: message_char = CH_A; 1: message_char = CH_R; 2: message_char = CH_SPACE;
-                    3: message_char = CH_F; 4: message_char = CH_R; 5: message_char = CH_U;
-                    6: message_char = CH_I; 7: message_char = CH_T; 8: message_char = CH_SPACE;
-                    9: message_char = CH_N; 10: message_char = CH_I; 11: message_char = CH_N;
-                    12: message_char = CH_J; 13: message_char = CH_A; default: message_char = CH_SPACE;
+                4'd0: unique case (index) // WELCOME TO
+                    0: message_char = CH_W; 1: message_char = CH_E; 2: message_char = CH_L;
+                    3: message_char = CH_C; 4: message_char = CH_O; 5: message_char = CH_M;
+                    6: message_char = CH_E; 7: message_char = CH_SPACE; 8: message_char = CH_T;
+                    9: message_char = CH_O; default: message_char = CH_SPACE;
                 endcase
-                3'd1: unique case (index) // PRESS KEY1 TO START
+                4'd1: unique case (index) // PRESS KEY1 TO START
                     0: message_char = CH_P; 1: message_char = CH_R; 2: message_char = CH_E;
                     3: message_char = CH_S; 4: message_char = CH_S; 5: message_char = CH_SPACE;
                     6: message_char = CH_K; 7: message_char = CH_E; 8: message_char = CH_Y;
@@ -271,75 +314,132 @@ module ui_renderer (
                     15: message_char = CH_T; 16: message_char = CH_A; 17: message_char = CH_R;
                     18: message_char = CH_T; default: message_char = CH_SPACE;
                 endcase
-                3'd2: unique case (index) // GAME OVER
+                4'd2: unique case (index) // GAME OVER
                     0: message_char = CH_G; 1: message_char = CH_A; 2: message_char = CH_M;
                     3: message_char = CH_E; 4: message_char = CH_SPACE; 5: message_char = CH_O;
                     6: message_char = CH_V; 7: message_char = CH_E; 8: message_char = CH_R;
                     default: message_char = CH_SPACE;
                 endcase
-                3'd3: unique case (index) // SCORE
+                4'd3: unique case (index) // SCORE
                     0: message_char = CH_S; 1: message_char = CH_C; 2: message_char = CH_O;
                     3: message_char = CH_R; 4: message_char = CH_E; default: message_char = CH_SPACE;
                 endcase
-                3'd4: unique case (index) // KEY1 MENU
+                4'd4: unique case (index) // KEY1 MENU
                     0: message_char = CH_K; 1: message_char = CH_E; 2: message_char = CH_Y;
                     3: message_char = CH_1; 4: message_char = CH_SPACE; 5: message_char = CH_M;
                     6: message_char = CH_E; 7: message_char = CH_N; 8: message_char = CH_U;
                     default: message_char = CH_SPACE;
                 endcase
-                3'd5: unique case (index) // KEY2 RETRY
+                4'd5: unique case (index) // KEY2 RETRY
                     0: message_char = CH_K; 1: message_char = CH_E; 2: message_char = CH_Y;
                     3: message_char = CH_2; 4: message_char = CH_SPACE; 5: message_char = CH_R;
                     6: message_char = CH_E; 7: message_char = CH_T; 8: message_char = CH_R;
                     9: message_char = CH_Y; default: message_char = CH_SPACE;
+                endcase
+                4'd6: unique case (index) // KEY3 SCORES
+                    0: message_char = CH_K; 1: message_char = CH_E; 2: message_char = CH_Y;
+                    3: message_char = CH_3; 4: message_char = CH_SPACE; 5: message_char = CH_S;
+                    6: message_char = CH_C; 7: message_char = CH_O; 8: message_char = CH_R;
+                    9: message_char = CH_E; 10: message_char = CH_S; default: message_char = CH_SPACE;
+                endcase
+                4'd7: unique case (index) // HIGH SCORES
+                    0: message_char = CH_H; 1: message_char = CH_I; 2: message_char = CH_G;
+                    3: message_char = CH_H; 4: message_char = CH_SPACE; 5: message_char = CH_S;
+                    6: message_char = CH_C; 7: message_char = CH_O; 8: message_char = CH_R;
+                    9: message_char = CH_E; 10: message_char = CH_S; default: message_char = CH_SPACE;
+                endcase
+                4'd8: unique case (index) // KEY1 BACK
+                    0: message_char = CH_K; 1: message_char = CH_E; 2: message_char = CH_Y;
+                    3: message_char = CH_1; 4: message_char = CH_SPACE; 5: message_char = CH_B;
+                    6: message_char = CH_A; 7: message_char = CH_C; 8: message_char = CH_K;
+                    default: message_char = CH_SPACE;
+                endcase
+                4'd9: unique case (index) // AR FRUIT NINJA
+                    0: message_char = CH_A; 1: message_char = CH_R; 2: message_char = CH_SPACE;
+                    3: message_char = CH_F; 4: message_char = CH_R; 5: message_char = CH_U;
+                    6: message_char = CH_I; 7: message_char = CH_T; 8: message_char = CH_SPACE;
+                    9: message_char = CH_N; 10: message_char = CH_I; 11: message_char = CH_N;
+                    12: message_char = CH_J; 13: message_char = CH_A; default: message_char = CH_SPACE;
+                endcase
+                4'd10: unique case (index) // KEY2 SCORES
+                    0: message_char = CH_K; 1: message_char = CH_E; 2: message_char = CH_Y;
+                    3: message_char = CH_2; 4: message_char = CH_SPACE; 5: message_char = CH_S;
+                    6: message_char = CH_C; 7: message_char = CH_O; 8: message_char = CH_R;
+                    9: message_char = CH_E; 10: message_char = CH_S; default: message_char = CH_SPACE;
                 endcase
                 default: message_char = CH_SPACE;
             endcase
         end
     endfunction
 
-    function automatic logic text_pixel(
-        input logic [2:0] msg,
+    function automatic logic text_pixel_scaled(
+        input logic [3:0] msg,
         input int msg_len,
         input logic [9:0] x,
         input logic [9:0] y,
         input int origin_x,
-        input int origin_y
+        input int origin_y,
+        input int scale
     );
         int rel_x;
         int rel_y;
         int char_index;
-        int cell_x;
         int glyph_x;
         int glyph_y;
+        int char_origin_x;
         logic [4:0] row_bits;
         begin
-            text_pixel = 1'b0;
+            text_pixel_scaled = 1'b0;
 
             if ((x >= origin_x) &&
-                (x < origin_x + msg_len * TEXT_CELL_W * TEXT_SCALE) &&
+                (x < origin_x + msg_len * TEXT_CELL_W * scale) &&
                 (y >= origin_y) &&
-                (y < origin_y + TEXT_CELL_H * TEXT_SCALE)) begin
+                (y < origin_y + TEXT_CELL_H * scale)) begin
                 rel_x = x - origin_x;
                 rel_y = y - origin_y;
-                char_index = rel_x / (TEXT_CELL_W * TEXT_SCALE);
-                cell_x = (rel_x - char_index * TEXT_CELL_W * TEXT_SCALE) / TEXT_SCALE;
-                glyph_x = cell_x;
-                glyph_y = rel_y / TEXT_SCALE;
 
-                if (glyph_x < 5) begin
-                    row_bits = glyph_row(message_char(msg, char_index), glyph_y[2:0]);
-                    text_pixel = row_bits[4 - glyph_x] ||
-                                 ((glyph_x > 0) && row_bits[5 - glyph_x]);
+                for (char_index = 0; char_index < 24; char_index = char_index + 1) begin
+                    char_origin_x = char_index * TEXT_CELL_W * scale;
+
+                    if (char_index < msg_len) begin
+                        for (glyph_y = 0; glyph_y < TEXT_CELL_H; glyph_y = glyph_y + 1) begin
+                            if ((rel_y >= glyph_y * scale) &&
+                                (rel_y < (glyph_y + 1) * scale)) begin
+                                row_bits = glyph_row(message_char(msg, char_index), glyph_y[2:0]);
+
+                                for (glyph_x = 0; glyph_x < 5; glyph_x = glyph_x + 1) begin
+                                    if ((rel_x >= char_origin_x + glyph_x * scale) &&
+                                        (rel_x < char_origin_x + (glyph_x + 1) * scale) &&
+                                        row_bits[4 - glyph_x]) begin
+                                        text_pixel_scaled = 1'b1;
+                                    end
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end
     endfunction
 
+    function automatic logic score_bcd_pixel(
+        input logic [15:0] bcd,
+        input logic [9:0] x,
+        input logic [9:0] y,
+        input int origin_x,
+        input int origin_y
+    );
+        begin
+            score_bcd_pixel =
+                digit_pixel(bcd[15:12], x, y, origin_x, origin_y) ||
+                digit_pixel(bcd[11:8],  x, y, origin_x + DIGIT_STEP, origin_y) ||
+                digit_pixel(bcd[7:4],   x, y, origin_x + 2 * DIGIT_STEP, origin_y) ||
+                digit_pixel(bcd[3:0],   x, y, origin_x + 3 * DIGIT_STEP, origin_y);
+        end
+    endfunction
+
     assign hud_bar = (game_state == GAME_PLAYING) && (DrawY < 10'd44);
-    assign panel_hit = ((game_state == GAME_START) || (game_state == GAME_OVER)) &&
-                       (DrawX >= 10'd64) && (DrawX < 10'd576) &&
-                       (DrawY >= 10'd96) && (DrawY < 10'd384);
+    assign panel_hit = 1'b0;
 
     assign score_hit =
         (game_state == GAME_PLAYING) &&
@@ -378,15 +478,40 @@ module ui_renderer (
          digit_pixel(score_tens,      DrawX, DrawY, 276 + 2 * DIGIT_STEP, 260) ||
          digit_pixel(score_ones,      DrawX, DrawY, 276 + 3 * DIGIT_STEP, 260));
 
+    assign high_score_hit =
+        (game_state == GAME_HIGHSCORES) &&
+        ((digit_pixel(4'd1, DrawX, DrawY, 178, 144) ||
+          score_bcd_pixel(high_score0_bcd, DrawX, DrawY, 268, 144)) ||
+         (digit_pixel(4'd2, DrawX, DrawY, 178, 184) ||
+          score_bcd_pixel(high_score1_bcd, DrawX, DrawY, 268, 184)) ||
+         (digit_pixel(4'd3, DrawX, DrawY, 178, 224) ||
+          score_bcd_pixel(high_score2_bcd, DrawX, DrawY, 268, 224)) ||
+         (digit_pixel(4'd4, DrawX, DrawY, 178, 264) ||
+          score_bcd_pixel(high_score3_bcd, DrawX, DrawY, 268, 264)) ||
+         (digit_pixel(4'd5, DrawX, DrawY, 178, 304) ||
+          score_bcd_pixel(high_score4_bcd, DrawX, DrawY, 268, 304)));
+
+    assign title_hit =
+        (game_state == GAME_START) &&
+        (text_pixel_scaled(4'd9, 14, DrawX, DrawY, 110, 146, 5) ||
+         text_pixel_scaled(4'd9, 14, DrawX, DrawY, 112, 146, 5) ||
+         text_pixel_scaled(4'd9, 14, DrawX, DrawY, 110, 148, 5));
+
     assign text_hit =
         ((game_state == GAME_START) &&
-         (text_pixel(3'd0, 14, DrawX, DrawY, 152, 150) ||
-          text_pixel(3'd1, 19, DrawX, DrawY, 92, 250))) ||
+         (text_pixel_scaled(4'd0, 10, DrawX, DrawY, 170, 86, 5) ||
+          text_pixel_scaled(4'd1, 19, DrawX, DrawY, 150, 252, 3) ||
+          text_pixel_scaled(4'd10, 11, DrawX, DrawY, 221, 286, 3))) ||
         ((game_state == GAME_OVER) &&
-         (text_pixel(3'd2, 9,  DrawX, DrawY, 212, 130) ||
-          text_pixel(3'd3, 5,  DrawX, DrawY, 260, 210) ||
-          text_pixel(3'd4, 9,  DrawX, DrawY, 212, 320) ||
-          text_pixel(3'd5, 10, DrawX, DrawY, 200, 352)));
+         (text_pixel_scaled(4'd2, 9,  DrawX, DrawY, 185, 110, 5) ||
+          text_pixel_scaled(4'd3, 5,  DrawX, DrawY, 275, 198, 3) ||
+          text_pixel_scaled(4'd4, 9,  DrawX, DrawY, 239, 320, 3) ||
+          text_pixel_scaled(4'd5, 10, DrawX, DrawY, 230, 350, 3) ||
+          text_pixel_scaled(4'd6, 11, DrawX, DrawY, 221, 380, 3))) ||
+        ((game_state == GAME_HIGHSCORES) &&
+         (text_pixel_scaled(4'd7, 11, DrawX, DrawY, 155, 82, 5) ||
+          text_pixel_scaled(4'd8, 9,  DrawX, DrawY, 145, 382, 3) ||
+          text_pixel_scaled(4'd5, 10, DrawX, DrawY, 330, 382, 3)));
 
     assign score_shadow_hit =
         (game_state == GAME_PLAYING) &&
@@ -407,24 +532,54 @@ module ui_renderer (
          digit_pixel(score_tens,      DrawX, DrawY, 276 + 2 * DIGIT_STEP + SHADOW_OFFSET, 260 + SHADOW_OFFSET) ||
          digit_pixel(score_ones,      DrawX, DrawY, 276 + 3 * DIGIT_STEP + SHADOW_OFFSET, 260 + SHADOW_OFFSET));
 
+    assign high_score_shadow_hit =
+        (game_state == GAME_HIGHSCORES) &&
+        ((digit_pixel(4'd1, DrawX, DrawY, 178 + SHADOW_OFFSET, 144 + SHADOW_OFFSET) ||
+          score_bcd_pixel(high_score0_bcd, DrawX, DrawY, 268 + SHADOW_OFFSET, 144 + SHADOW_OFFSET)) ||
+         (digit_pixel(4'd2, DrawX, DrawY, 178 + SHADOW_OFFSET, 184 + SHADOW_OFFSET) ||
+          score_bcd_pixel(high_score1_bcd, DrawX, DrawY, 268 + SHADOW_OFFSET, 184 + SHADOW_OFFSET)) ||
+         (digit_pixel(4'd3, DrawX, DrawY, 178 + SHADOW_OFFSET, 224 + SHADOW_OFFSET) ||
+          score_bcd_pixel(high_score2_bcd, DrawX, DrawY, 268 + SHADOW_OFFSET, 224 + SHADOW_OFFSET)) ||
+         (digit_pixel(4'd4, DrawX, DrawY, 178 + SHADOW_OFFSET, 264 + SHADOW_OFFSET) ||
+          score_bcd_pixel(high_score3_bcd, DrawX, DrawY, 268 + SHADOW_OFFSET, 264 + SHADOW_OFFSET)) ||
+         (digit_pixel(4'd5, DrawX, DrawY, 178 + SHADOW_OFFSET, 304 + SHADOW_OFFSET) ||
+          score_bcd_pixel(high_score4_bcd, DrawX, DrawY, 268 + SHADOW_OFFSET, 304 + SHADOW_OFFSET))) &&
+        !high_score_hit;
+
+    assign title_shadow_hit =
+        (game_state == GAME_START) &&
+        (text_pixel_scaled(4'd9, 14, DrawX, DrawY, 110 + SHADOW_OFFSET, 146 + SHADOW_OFFSET, 5) ||
+         text_pixel_scaled(4'd9, 14, DrawX, DrawY, 112 + SHADOW_OFFSET, 146 + SHADOW_OFFSET, 5) ||
+         text_pixel_scaled(4'd9, 14, DrawX, DrawY, 110 + SHADOW_OFFSET, 148 + SHADOW_OFFSET, 5)) &&
+        !title_hit;
+
     assign text_shadow_hit =
         ((game_state == GAME_START) &&
-         (text_pixel(3'd0, 14, DrawX, DrawY, 152 + SHADOW_OFFSET, 150 + SHADOW_OFFSET) ||
-          text_pixel(3'd1, 19, DrawX, DrawY, 92 + SHADOW_OFFSET, 250 + SHADOW_OFFSET))) ||
+         (text_pixel_scaled(4'd0, 10, DrawX, DrawY, 170 + SHADOW_OFFSET, 86 + SHADOW_OFFSET, 5) ||
+          text_pixel_scaled(4'd1, 19, DrawX, DrawY, 150 + SHADOW_OFFSET, 252 + SHADOW_OFFSET, 3) ||
+          text_pixel_scaled(4'd10, 11, DrawX, DrawY, 221 + SHADOW_OFFSET, 286 + SHADOW_OFFSET, 3))) ||
         ((game_state == GAME_OVER) &&
-         (text_pixel(3'd2, 9,  DrawX, DrawY, 212 + SHADOW_OFFSET, 130 + SHADOW_OFFSET) ||
-          text_pixel(3'd3, 5,  DrawX, DrawY, 260 + SHADOW_OFFSET, 210 + SHADOW_OFFSET) ||
-          text_pixel(3'd4, 9,  DrawX, DrawY, 212 + SHADOW_OFFSET, 320 + SHADOW_OFFSET) ||
-          text_pixel(3'd5, 10, DrawX, DrawY, 200 + SHADOW_OFFSET, 352 + SHADOW_OFFSET)));
+         (text_pixel_scaled(4'd2, 9,  DrawX, DrawY, 185 + SHADOW_OFFSET, 110 + SHADOW_OFFSET, 5) ||
+          text_pixel_scaled(4'd3, 5,  DrawX, DrawY, 275 + SHADOW_OFFSET, 198 + SHADOW_OFFSET, 3) ||
+          text_pixel_scaled(4'd4, 9,  DrawX, DrawY, 239 + SHADOW_OFFSET, 320 + SHADOW_OFFSET, 3) ||
+          text_pixel_scaled(4'd5, 10, DrawX, DrawY, 230 + SHADOW_OFFSET, 350 + SHADOW_OFFSET, 3) ||
+          text_pixel_scaled(4'd6, 11, DrawX, DrawY, 221 + SHADOW_OFFSET, 380 + SHADOW_OFFSET, 3))) ||
+        ((game_state == GAME_HIGHSCORES) &&
+         (text_pixel_scaled(4'd7, 11, DrawX, DrawY, 155 + SHADOW_OFFSET, 82 + SHADOW_OFFSET, 5) ||
+          text_pixel_scaled(4'd8, 9,  DrawX, DrawY, 145 + SHADOW_OFFSET, 382 + SHADOW_OFFSET, 3) ||
+          text_pixel_scaled(4'd5, 10, DrawX, DrawY, 330 + SHADOW_OFFSET, 382 + SHADOW_OFFSET, 3)));
 
     assign shadow_hit = (score_shadow_hit || timer_shadow_hit ||
-                         final_score_shadow_hit || text_shadow_hit) &&
-                        !(score_hit || timer_hit || final_score_hit || text_hit);
+                         final_score_shadow_hit || high_score_shadow_hit ||
+                         title_shadow_hit || text_shadow_hit) &&
+                        !(score_hit || timer_hit || final_score_hit ||
+                          high_score_hit || title_hit || text_hit);
 
     always_comb begin
         ui_hit = hud_bar || panel_hit || score_hit || timer_hit ||
                  separator_hit || life_empty_hit || life_full_hit ||
-                 final_score_hit || text_hit || shadow_hit;
+                 final_score_hit || high_score_hit || title_hit ||
+                 text_hit || shadow_hit;
         ui_r = 10'd0;
         ui_g = 10'd0;
         ui_b = 10'd0;
@@ -442,15 +597,21 @@ module ui_renderer (
         end
 
         if (shadow_hit) begin
-            ui_r = 10'h030;
-            ui_g = 10'h020;
-            ui_b = 10'h018;
+            ui_r = 10'h018;
+            ui_g = 10'h010;
+            ui_b = 10'h008;
         end
 
-        if (score_hit || final_score_hit) begin
+        if (score_hit || final_score_hit || high_score_hit) begin
             ui_r = 10'h3FF;
-            ui_g = 10'h2E0;
-            ui_b = 10'h060;
+            ui_g = 10'h3B0;
+            ui_b = 10'h050;
+        end
+
+        if (title_hit) begin
+            ui_r = 10'h3FF;
+            ui_g = 10'h2B0;
+            ui_b = 10'h020;
         end
 
         if (life_empty_hit) begin
@@ -466,9 +627,9 @@ module ui_renderer (
         end
 
         if (timer_hit || separator_hit || text_hit) begin
-            ui_r = 10'h3FF;
-            ui_g = 10'h360;
-            ui_b = 10'h180;
+            ui_r = 10'h260;
+            ui_g = 10'h3FF;
+            ui_b = 10'h3FF;
         end
     end
 

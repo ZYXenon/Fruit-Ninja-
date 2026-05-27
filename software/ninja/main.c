@@ -47,16 +47,17 @@
 #define GAME_START   0u
 #define GAME_PLAYING 1u
 #define GAME_OVER    2u
+#define GAME_HIGHSCORES 3u
 
 #define FRUIT_BOMB 5u
 
 #define TRACKER_VALID_MASK (1u << 30)
 #define KEY1_MASK          (1u << 1)
 #define KEY2_MASK          (1u << 2)
+#define KEY3_MASK          (1u << 3)
 #define BLADE_CUT_MIN_DELTA 14u
 #define FRUIT_HIT_PADDING 36u
-#define COMBO_WINDOW_FRAMES 90u
-#define COMBO_MAX_COUNT 9u
+#define COMBO_MAX_COUNT 4u
 #define COMBO_BONUS_STEP 5u
 #define BLADE_TRAIL_HIT_STEPS 8u
 
@@ -74,6 +75,7 @@ static uint16_t lfsr = 0xACE1u;
 static uint8_t commit_toggle;
 static uint8_t effect_toggle;
 static uint8_t game_state = GAME_START;
+static uint8_t high_scores_return_state = GAME_START;
 static uint16_t score_value;
 static uint8_t bomb_hits;
 static uint8_t time_tens = 6u;
@@ -82,7 +84,7 @@ static uint8_t second_frame_count;
 static uint8_t auto_spawn_timer;
 static uint8_t next_spawn_delay = 45u;
 static uint8_t combo_count;
-static uint8_t combo_timer;
+static uint16_t top_scores[5];
 static uint8_t prev_blade_valid;
 static uint16_t prev_blade_x;
 static uint16_t prev_blade_y;
@@ -117,47 +119,29 @@ static void reset_blade_motion(void)
 static void reset_combo(void)
 {
     combo_count = 0u;
-    combo_timer = 0u;
 }
 
 static int16_t register_fruit_slice(void)
 {
     int16_t score_delta = 10;
 
-    if (combo_timer != 0u)
+    if (combo_count < COMBO_MAX_COUNT)
     {
-        if (combo_count < COMBO_MAX_COUNT)
-        {
-            combo_count++;
-        }
+        combo_count++;
     }
-    else
-    {
-        combo_count = 1u;
-    }
-
-    combo_timer = COMBO_WINDOW_FRAMES;
 
     if (combo_count > 1u)
     {
         score_delta += (int16_t)((combo_count - 1u) * COMBO_BONUS_STEP);
     }
 
+    if (score_delta > 25)
+    {
+        score_delta = 25;
+    }
+
     apply_score_delta(score_delta);
     return score_delta;
-}
-
-static void update_combo_timer(void)
-{
-    if (combo_timer != 0u)
-    {
-        combo_timer--;
-
-        if (combo_timer == 0u)
-        {
-            combo_count = 0u;
-        }
-    }
 }
 
 static int16_t multi_slice_bonus(uint8_t sliced_count)
@@ -169,7 +153,7 @@ static int16_t multi_slice_bonus(uint8_t sliced_count)
         case 3u:
             return 25;
         case 4u:
-            return 45;
+            return 25;
         default:
             return 0;
     }
@@ -338,6 +322,33 @@ static void clear_fruits(void)
     }
 }
 
+static void record_score(uint16_t score)
+{
+    uint8_t i;
+    uint8_t j;
+
+    for (i = 0u; i < 5u; i++)
+    {
+        if (score > top_scores[i])
+        {
+            for (j = 4u; j > i; j--)
+            {
+                top_scores[j] = top_scores[j - 1u];
+            }
+
+            top_scores[i] = score;
+            break;
+        }
+    }
+}
+
+static void finish_game(void)
+{
+    clear_fruits();
+    record_score(score_value);
+    game_state = GAME_OVER;
+}
+
 static void start_game(void)
 {
     clear_fruits();
@@ -425,6 +436,24 @@ static void emit_slice_effect(uint8_t slot, uint8_t popup_class)
     int32_t y = fruits[slot].y_fp >> FP_SHIFT;
     uint32_t word;
 
+    if (x < 0)
+    {
+        x = 0;
+    }
+    else if (x > 639)
+    {
+        x = 639;
+    }
+
+    if (y < 0)
+    {
+        y = 0;
+    }
+    else if (y > 479)
+    {
+        y = 479;
+    }
+
     effect_toggle ^= 1u;
     word = ((uint32_t)effect_toggle << 31) |
            ((uint32_t)(slot & 0x3u) << 29) |
@@ -507,10 +536,6 @@ static void update_fruits(uint8_t blade_valid, uint16_t blade_x, uint16_t blade_
         apply_score_delta(multi_slice_bonus(sliced_fruits_this_frame));
     }
 
-    if ((sliced_fruits_this_frame == 0u) && !sliced_bomb_this_frame)
-    {
-        update_combo_timer();
-    }
 }
 
 static void update_timer(void)
@@ -551,14 +576,30 @@ static uint32_t pack_fruit_desc(uint8_t slot)
            (((uint32_t)y & 0xFFFu) << 4);
 }
 
+static uint32_t pack_score_pair(uint16_t low_score, uint16_t high_score)
+{
+    return ((uint32_t)(high_score & 0x3FFFu) << 16) |
+           ((uint32_t)(low_score & 0x3FFFu));
+}
+
 static void publish_game_state(void)
 {
     uint32_t ctrl;
 
-    pio_write(FRUIT0_DESC_PIO_BASE, pack_fruit_desc(0));
-    pio_write(FRUIT1_DESC_PIO_BASE, pack_fruit_desc(1));
-    pio_write(FRUIT2_DESC_PIO_BASE, pack_fruit_desc(2));
-    pio_write(FRUIT3_DESC_PIO_BASE, pack_fruit_desc(3));
+    if (game_state == GAME_HIGHSCORES)
+    {
+        pio_write(FRUIT0_DESC_PIO_BASE, pack_score_pair(top_scores[0], top_scores[1]));
+        pio_write(FRUIT1_DESC_PIO_BASE, pack_score_pair(top_scores[2], top_scores[3]));
+        pio_write(FRUIT2_DESC_PIO_BASE, (uint32_t)(top_scores[4] & 0x3FFFu));
+        pio_write(FRUIT3_DESC_PIO_BASE, 0u);
+    }
+    else
+    {
+        pio_write(FRUIT0_DESC_PIO_BASE, pack_fruit_desc(0));
+        pio_write(FRUIT1_DESC_PIO_BASE, pack_fruit_desc(1));
+        pio_write(FRUIT2_DESC_PIO_BASE, pack_fruit_desc(2));
+        pio_write(FRUIT3_DESC_PIO_BASE, pack_fruit_desc(3));
+    }
 
     commit_toggle ^= 1u;
     ctrl = ((uint32_t)commit_toggle << 31) |
@@ -572,7 +613,14 @@ static void publish_game_state(void)
     pio_write(GAME_CTRL_PIO_BASE, ctrl);
 }
 
-static void game_step(uint8_t key1_pressed, uint8_t key2_pressed, uint8_t blade_valid, uint16_t blade_x, uint16_t blade_y)
+static void game_step(
+    uint8_t key1_pressed,
+    uint8_t key2_pressed,
+    uint8_t key3_pressed,
+    uint8_t blade_valid,
+    uint16_t blade_x,
+    uint16_t blade_y
+)
 {
     lfsr_step();
 
@@ -584,6 +632,11 @@ static void game_step(uint8_t key1_pressed, uint8_t key2_pressed, uint8_t blade_
             {
                 start_game();
             }
+            else if (key2_pressed)
+            {
+                high_scores_return_state = GAME_START;
+                game_state = GAME_HIGHSCORES;
+            }
             break;
 
         case GAME_PLAYING:
@@ -592,8 +645,7 @@ static void game_step(uint8_t key1_pressed, uint8_t key2_pressed, uint8_t blade_
 
             if (((time_tens == 0u) && (time_ones == 0u)) || (bomb_hits >= 3u))
             {
-                clear_fruits();
-                game_state = GAME_OVER;
+                finish_game();
                 break;
             }
 
@@ -619,6 +671,23 @@ static void game_step(uint8_t key1_pressed, uint8_t key2_pressed, uint8_t blade_
             else if (key1_pressed)
             {
                 game_state = GAME_START;
+            }
+            else if (key3_pressed)
+            {
+                high_scores_return_state = GAME_OVER;
+                game_state = GAME_HIGHSCORES;
+            }
+            break;
+
+        case GAME_HIGHSCORES:
+            clear_fruits();
+            if (key1_pressed)
+            {
+                game_state = high_scores_return_state;
+            }
+            else if (key2_pressed)
+            {
+                start_game();
             }
             break;
 
@@ -669,6 +738,9 @@ int main(void)
             uint32_t tracker = pio_read(TRACKER_STATUS_PIO_BASE);
             uint8_t key1_pressed = ((prev_keys & KEY1_MASK) != 0u) && ((keys & KEY1_MASK) == 0u);
             uint8_t key2_pressed = ((prev_keys & KEY2_MASK) != 0u) && ((keys & KEY2_MASK) == 0u);
+            uint8_t key3_down = ((keys & KEY3_MASK) == 0u);
+            uint8_t key3_pressed = (((prev_keys & KEY3_MASK) != 0u) && key3_down) ||
+                                   ((game_state == GAME_OVER) && key3_down);
             uint8_t blade_valid = (tracker & TRACKER_VALID_MASK) ? 1u : 0u;
             uint16_t blade_x = (uint16_t)((tracker >> 20) & 0x3FFu);
             uint16_t blade_y = (uint16_t)((tracker >> 10) & 0x3FFu);
@@ -677,7 +749,7 @@ int main(void)
             last_frame = frame;
             prev_keys = keys;
 
-            game_step(key1_pressed, key2_pressed, blade_cut_valid, blade_x, blade_y);
+            game_step(key1_pressed, key2_pressed, key3_pressed, blade_cut_valid, blade_x, blade_y);
             publish_game_state();
         }
     }
