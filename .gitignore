@@ -1,1 +1,16 @@
 *.flock
+
+# Quartus generated build products and caches.
+/db/
+/incremental_db/
+/output_files/
+
+# Simulation/export products.
+/simulation/modelsim/
+
+# Nios II generated software build products.
+/software/ninja/obj/
+/software/ninja/*.elf
+/software/ninja/*.map
+/software/ninja/*.objdump
+/software/ninja/*.srec
