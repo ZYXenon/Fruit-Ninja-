@@ -1,6 +1,8 @@
 #include <stdint.h>
+#include <stdio.h>
 
 #include "driver_ov2640_basic.h"
+#include "driver_wm8731.h"
 #include "io.h"
 #include "priv/alt_busy_sleep.h"
 #include "system.h"
@@ -704,6 +706,8 @@ int main(void)
 
     clear_fruits();
     publish_game_state();
+
+    (void)wm8731_init();
 
     if (ov2640_basic_init() != 0)
     {
