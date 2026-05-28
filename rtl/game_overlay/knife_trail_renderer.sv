@@ -22,8 +22,10 @@ module knife_trail_renderer (
     logic [9:0] trail_y [0:TRAIL_LEN-1];
     logic       trail_valid [0:TRAIL_LEN-1];
 
-    localparam logic signed [11:0] LINE_HALF_WIDTH = 12'sd5;
-    localparam logic signed [11:0] CAP_RADIUS = 12'sd8;
+    localparam logic signed [11:0] HEAD_LINE_HALF_WIDTH = 12'sd7;
+    localparam logic signed [11:0] TAIL_LINE_HALF_WIDTH = 12'sd1;
+    localparam logic signed [11:0] HEAD_CAP_RADIUS = 12'sd8;
+    localparam logic signed [11:0] TAIL_CAP_RADIUS = 12'sd1;
 
     logic signed [11:0] draw_x_s;
     logic signed [11:0] draw_y_s;
@@ -45,6 +47,9 @@ module knife_trail_renderer (
     logic [11:0] abs_seg_dx;
     logic [11:0] abs_seg_dy;
     logic [12:0] seg_manhattan;
+    logic signed [11:0] point_cap_radius;
+    logic signed [11:0] segment_half_width;
+    logic signed [11:0] segment_bound_radius;
     logic       trail_hit;
 
     function automatic logic [11:0] abs12(input logic signed [11:0] value);
@@ -53,6 +58,32 @@ module knife_trail_renderer (
 
     function automatic logic [25:0] abs26(input logic signed [25:0] value);
         abs26 = value[25] ? $unsigned(-value) : $unsigned(value);
+    endfunction
+
+    function automatic logic signed [11:0] point_radius(input int index);
+        case (index)
+            0: point_radius = HEAD_CAP_RADIUS;
+            1: point_radius = 12'sd7;
+            2: point_radius = 12'sd6;
+            3: point_radius = 12'sd5;
+            4: point_radius = 12'sd4;
+            5: point_radius = 12'sd3;
+            6: point_radius = 12'sd2;
+            default: point_radius = TAIL_CAP_RADIUS;
+        endcase
+    endfunction
+
+    function automatic logic signed [11:0] segment_width(input int index);
+        case (index)
+            0: segment_width = HEAD_LINE_HALF_WIDTH;
+            1: segment_width = 12'sd6;
+            2: segment_width = 12'sd5;
+            3: segment_width = 12'sd4;
+            4: segment_width = 12'sd3;
+            5: segment_width = 12'sd2;
+            6: segment_width = TAIL_LINE_HALF_WIDTH;
+            default: segment_width = TAIL_LINE_HALF_WIDTH;
+        endcase
     endfunction
 
     always_ff @(posedge clk or posedge reset) begin
@@ -104,6 +135,9 @@ module knife_trail_renderer (
         abs_seg_dx = 12'd0;
         abs_seg_dy = 12'd0;
         seg_manhattan = 13'd0;
+        point_cap_radius = TAIL_CAP_RADIUS;
+        segment_half_width = TAIL_LINE_HALF_WIDTH;
+        segment_bound_radius = TAIL_CAP_RADIUS;
         trail_hit = 1'b0;
 
         out_r = bg_r;
@@ -115,15 +149,18 @@ module knife_trail_renderer (
             dy = draw_y_s - $signed({2'b00, trail_y[i]});
             abs_dx = abs12(dx);
             abs_dy = abs12(dy);
+            point_cap_radius = point_radius(i);
 
             if (trail_valid[i] &&
-                ((abs_dx + abs_dy) <= $unsigned(CAP_RADIUS))) begin
+                ((abs_dx + abs_dy) <= $unsigned(point_cap_radius))) begin
                 trail_hit = 1'b1;
             end
         end
 
         for (int i = TRAIL_LEN - 2; i >= 0; i = i - 1) begin
             if (trail_valid[i] && trail_valid[i + 1]) begin
+                segment_half_width = segment_width(i);
+                segment_bound_radius = point_radius(i);
                 seg_dx = $signed({2'b00, trail_x[i]}) - $signed({2'b00, trail_x[i + 1]});
                 seg_dy = $signed({2'b00, trail_y[i]}) - $signed({2'b00, trail_y[i + 1]});
                 pix_dx = draw_x_s - $signed({2'b00, trail_x[i + 1]});
@@ -133,7 +170,7 @@ module knife_trail_renderer (
                 seg_manhattan = {1'b0, abs_seg_dx} + {1'b0, abs_seg_dy};
                 cross_term = (pix_dx * seg_dy) - (pix_dy * seg_dx);
                 cross_abs = abs26(cross_term);
-                cross_limit = LINE_HALF_WIDTH * {13'd0, seg_manhattan};
+                cross_limit = segment_half_width * {13'd0, seg_manhattan};
 
                 if (trail_x[i] < trail_x[i + 1]) begin
                     min_x = $signed({2'b00, trail_x[i]});
@@ -152,10 +189,10 @@ module knife_trail_renderer (
                 end
 
                 if ((seg_manhattan != 13'd0) &&
-                    (draw_x_s >= (min_x - CAP_RADIUS)) &&
-                    (draw_x_s <= (max_x + CAP_RADIUS)) &&
-                    (draw_y_s >= (min_y - CAP_RADIUS)) &&
-                    (draw_y_s <= (max_y + CAP_RADIUS)) &&
+                    (draw_x_s >= (min_x - segment_bound_radius)) &&
+                    (draw_x_s <= (max_x + segment_bound_radius)) &&
+                    (draw_y_s >= (min_y - segment_bound_radius)) &&
+                    (draw_y_s <= (max_y + segment_bound_radius)) &&
                     (cross_abs <= cross_limit)) begin
                     trail_hit = 1'b1;
                 end

@@ -10,6 +10,17 @@
 `include "rtl/game_overlay/knife_renderer.sv"
 `include "rtl/game_overlay/ar_game_overlay.sv"
 `include "rtl/background_rom.sv"
+`include "rtl/audio/audio_clock_gen.sv"
+`include "rtl/audio/audio_event_sync.sv"
+`include "rtl/audio/audio_sample_rom_slice.sv"
+`include "rtl/audio/audio_sample_rom_bomb.sv"
+`include "rtl/audio/audio_sample_rom_background.sv"
+`include "rtl/audio/audio_sample_rom_start.sv"
+`include "rtl/audio/audio_poly_pcm_player.sv"
+`include "rtl/audio/audio_adpcm_player.sv"
+`include "rtl/audio/audio_mixer.sv"
+`include "rtl/audio/wm8731_i2s_tx.sv"
+`include "rtl/audio/audio_top.sv"
 
 module final_top (
     input  logic        CLOCK_50,
@@ -32,6 +43,13 @@ module final_top (
     output logic [7:0]  VGA_R,
     output logic [7:0]  VGA_G,
     output logic [7:0]  VGA_B,
+
+    output logic        AUD_XCK,
+    input  logic        AUD_BCLK,
+    input  logic        AUD_DACLRCK,
+    output logic        AUD_DACDAT,
+    inout  wire         I2C_SCLK,
+    inout  wire         I2C_SDAT,
 
     output logic [12:0] DRAM_ADDR,
     output logic [1:0]  DRAM_BA,
@@ -73,6 +91,12 @@ module final_top (
     logic        i2c_scl_in;
     logic        i2c_sda_oe;
     logic        i2c_scl_oe;
+`ifdef HAVE_CODEC_I2C_AVALON
+    logic        audio_i2c_sda_in;
+    logic        audio_i2c_scl_in;
+    logic        audio_i2c_sda_oe;
+    logic        audio_i2c_scl_oe;
+`endif
 
     (* keep = "true", preserve *) logic [9:0]  draw_x;
     (* keep = "true", preserve *) logic [9:0]  draw_y;
@@ -169,6 +193,7 @@ module final_top (
     logic [31:0] fruit2_desc_pio;
     logic [31:0] fruit3_desc_pio;
     logic [31:0] effect_event_pio;
+    logic        audio_pll_locked;
     logic        frame_tick_vga;
     logic        frame_tick_toggle_vga;
     logic [2:0]  frame_tick_sync;
@@ -243,6 +268,17 @@ module final_top (
     assign CAM_SIOC = DEBUG_SRAM_TEST ? 1'bz : (i2c_scl_oe ? 1'b0 : 1'bz);
     assign i2c_sda_in = CAM_SIOD;
     assign i2c_scl_in = CAM_SIOC;
+
+`ifdef HAVE_CODEC_I2C_AVALON
+    assign I2C_SDAT = audio_i2c_sda_oe ? 1'b0 : 1'bz;
+    assign I2C_SCLK = audio_i2c_scl_oe ? 1'b0 : 1'bz;
+    assign audio_i2c_sda_in = I2C_SDAT;
+    assign audio_i2c_scl_in = I2C_SCLK;
+`else
+    assign I2C_SDAT = 1'bz;
+    assign I2C_SCLK = 1'bz;
+`endif
+
     assign color_debug_mode = 3'b000;
 
     assign debug_cam_backpressure = cam_fifo_wr_valid && !cam_fifo_wr_ready;
@@ -278,7 +314,25 @@ module final_top (
         .sdram_wire_dqm          (DRAM_DQM),
         .sdram_wire_ras_n        (DRAM_RAS_N),
         .sdram_wire_we_n         (DRAM_WE_N),
+`ifdef HAVE_CODEC_I2C_AVALON
+        .audio_i2c_0_i2c_serial_sda_in (audio_i2c_sda_in),
+        .audio_i2c_0_i2c_serial_scl_in (audio_i2c_scl_in),
+        .audio_i2c_0_i2c_serial_sda_oe (audio_i2c_sda_oe),
+        .audio_i2c_0_i2c_serial_scl_oe (audio_i2c_scl_oe),
+`endif
         .tracker_status_pio_external_connection_export (tracker_status_pio)
+    );
+
+    audio_top audio (
+        .clk_50           (CLOCK_50),
+        .reset            (reset),
+        .effect_event_pio (effect_event_pio),
+        .game_ctrl_pio    (game_ctrl_pio),
+        .aud_bclk         (AUD_BCLK),
+        .aud_daclrck      (AUD_DACLRCK),
+        .aud_xck          (AUD_XCK),
+        .aud_dacdat       (AUD_DACDAT),
+        .audio_pll_locked (audio_pll_locked)
     );
 
     always_ff @(posedge vga_clk or posedge reset) begin
