@@ -1,5 +1,9 @@
 	component project_soc is
 		port (
+			audio_i2c_0_i2c_serial_sda_in                 : in    std_logic                     := 'X';             -- sda_in
+			audio_i2c_0_i2c_serial_scl_in                 : in    std_logic                     := 'X';             -- scl_in
+			audio_i2c_0_i2c_serial_sda_oe                 : out   std_logic;                                        -- sda_oe
+			audio_i2c_0_i2c_serial_scl_oe                 : out   std_logic;                                        -- scl_oe
 			cam_ctrl_export                               : out   std_logic_vector(1 downto 0);                     -- export
 			clk_clk                                       : in    std_logic                     := 'X';             -- clk
 			effect_event_pio_external_connection_export   : out   std_logic_vector(31 downto 0);                    -- export

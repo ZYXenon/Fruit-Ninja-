@@ -4,6 +4,10 @@
 
 `timescale 1 ps / 1 ps
 module project_soc (
+		input  wire        audio_i2c_0_i2c_serial_sda_in,                 //                 audio_i2c_0_i2c_serial.sda_in
+		input  wire        audio_i2c_0_i2c_serial_scl_in,                 //                                       .scl_in
+		output wire        audio_i2c_0_i2c_serial_sda_oe,                 //                                       .sda_oe
+		output wire        audio_i2c_0_i2c_serial_scl_oe,                 //                                       .scl_oe
 		output wire [1:0]  cam_ctrl_export,                               //                               cam_ctrl.export
 		input  wire        clk_clk,                                       //                                    clk.clk
 		output wire [31:0] effect_event_pio_external_connection_export,   //   effect_event_pio_external_connection.export
@@ -59,6 +63,11 @@ module project_soc (
 	wire         mm_interconnect_0_i2c_0_csr_read;                            // mm_interconnect_0:i2c_0_csr_read -> i2c_0:read
 	wire         mm_interconnect_0_i2c_0_csr_write;                           // mm_interconnect_0:i2c_0_csr_write -> i2c_0:write
 	wire  [31:0] mm_interconnect_0_i2c_0_csr_writedata;                       // mm_interconnect_0:i2c_0_csr_writedata -> i2c_0:writedata
+	wire  [31:0] mm_interconnect_0_audio_i2c_0_csr_readdata;                  // audio_i2c_0:readdata -> mm_interconnect_0:audio_i2c_0_csr_readdata
+	wire   [3:0] mm_interconnect_0_audio_i2c_0_csr_address;                   // mm_interconnect_0:audio_i2c_0_csr_address -> audio_i2c_0:addr
+	wire         mm_interconnect_0_audio_i2c_0_csr_read;                      // mm_interconnect_0:audio_i2c_0_csr_read -> audio_i2c_0:read
+	wire         mm_interconnect_0_audio_i2c_0_csr_write;                     // mm_interconnect_0:audio_i2c_0_csr_write -> audio_i2c_0:write
+	wire  [31:0] mm_interconnect_0_audio_i2c_0_csr_writedata;                 // mm_interconnect_0:audio_i2c_0_csr_writedata -> audio_i2c_0:writedata
 	wire  [31:0] mm_interconnect_0_nios2_gen2_0_debug_mem_slave_readdata;     // nios2_gen2_0:debug_mem_slave_readdata -> mm_interconnect_0:nios2_gen2_0_debug_mem_slave_readdata
 	wire         mm_interconnect_0_nios2_gen2_0_debug_mem_slave_waitrequest;  // nios2_gen2_0:debug_mem_slave_waitrequest -> mm_interconnect_0:nios2_gen2_0_debug_mem_slave_waitrequest
 	wire         mm_interconnect_0_nios2_gen2_0_debug_mem_slave_debugaccess;  // mm_interconnect_0:nios2_gen2_0_debug_mem_slave_debugaccess -> nios2_gen2_0:debug_mem_slave_debugaccess
@@ -131,11 +140,36 @@ module project_soc (
 	wire  [31:0] mm_interconnect_0_effect_event_pio_s1_writedata;             // mm_interconnect_0:effect_event_pio_s1_writedata -> effect_event_pio:writedata
 	wire         irq_mapper_receiver0_irq;                                    // jtag_uart_0:av_irq -> irq_mapper:receiver0_irq
 	wire  [31:0] nios2_gen2_0_irq_irq;                                        // irq_mapper:sender_irq -> nios2_gen2_0:irq
-	wire         rst_controller_reset_out_reset;                              // rst_controller:reset_out -> [cam_ctrl_pio:reset_n, effect_event_pio:reset_n, frame_counter_pio:reset_n, fruit0_desc_pio:reset_n, fruit1_desc_pio:reset_n, fruit2_desc_pio:reset_n, fruit3_desc_pio:reset_n, game_ctrl_pio:reset_n, i2c_0:rst_n, irq_mapper:reset, keys_pio:reset_n, mm_interconnect_0:nios2_gen2_0_reset_reset_bridge_in_reset_reset, nios2_gen2_0:reset_n, onchip_memory2_0:reset, rst_translator:in_reset, sdram_pll:reset, sysid_qsys_0:reset_n, tracker_status_pio:reset_n]
+	wire         rst_controller_reset_out_reset;                              // rst_controller:reset_out -> [audio_i2c_0:rst_n, cam_ctrl_pio:reset_n, effect_event_pio:reset_n, frame_counter_pio:reset_n, fruit0_desc_pio:reset_n, fruit1_desc_pio:reset_n, fruit2_desc_pio:reset_n, fruit3_desc_pio:reset_n, game_ctrl_pio:reset_n, i2c_0:rst_n, irq_mapper:reset, keys_pio:reset_n, mm_interconnect_0:nios2_gen2_0_reset_reset_bridge_in_reset_reset, nios2_gen2_0:reset_n, onchip_memory2_0:reset, rst_translator:in_reset, sdram_pll:reset, sysid_qsys_0:reset_n, tracker_status_pio:reset_n]
 	wire         rst_controller_reset_out_reset_req;                          // rst_controller:reset_req -> [nios2_gen2_0:reset_req, onchip_memory2_0:reset_req, rst_translator:reset_req_in]
 	wire         nios2_gen2_0_debug_reset_request_reset;                      // nios2_gen2_0:debug_reset_request -> [rst_controller:reset_in1, rst_controller_002:reset_in1]
 	wire         rst_controller_001_reset_out_reset;                          // rst_controller_001:reset_out -> [jtag_uart_0:rst_n, mm_interconnect_0:jtag_uart_0_reset_reset_bridge_in_reset_reset]
 	wire         rst_controller_002_reset_out_reset;                          // rst_controller_002:reset_out -> [mm_interconnect_0:sdram_reset_reset_bridge_in_reset_reset, sdram:reset_n]
+
+	altera_avalon_i2c #(
+		.USE_AV_ST       (0),
+		.FIFO_DEPTH      (4),
+		.FIFO_DEPTH_LOG2 (2)
+	) audio_i2c_0 (
+		.clk       (clk_clk),                                     //            clock.clk
+		.rst_n     (~rst_controller_reset_out_reset),             //       reset_sink.reset_n
+		.intr      (),                                            // interrupt_sender.irq
+		.addr      (mm_interconnect_0_audio_i2c_0_csr_address),   //              csr.address
+		.read      (mm_interconnect_0_audio_i2c_0_csr_read),      //                 .read
+		.write     (mm_interconnect_0_audio_i2c_0_csr_write),     //                 .write
+		.writedata (mm_interconnect_0_audio_i2c_0_csr_writedata), //                 .writedata
+		.readdata  (mm_interconnect_0_audio_i2c_0_csr_readdata),  //                 .readdata
+		.sda_in    (audio_i2c_0_i2c_serial_sda_in),               //       i2c_serial.sda_in
+		.scl_in    (audio_i2c_0_i2c_serial_scl_in),               //                 .scl_in
+		.sda_oe    (audio_i2c_0_i2c_serial_sda_oe),               //                 .sda_oe
+		.scl_oe    (audio_i2c_0_i2c_serial_scl_oe),               //                 .scl_oe
+		.src_data  (),                                            //      (terminated)
+		.src_valid (),                                            //      (terminated)
+		.src_ready (1'b0),                                        //      (terminated)
+		.snk_data  (16'b0000000000000000),                        //      (terminated)
+		.snk_valid (1'b0),                                        //      (terminated)
+		.snk_ready ()                                             //      (terminated)
+	);
 
 	project_soc_cam_ctrl_pio cam_ctrl_pio (
 		.clk        (clk_clk),                                      //                 clk.clk
@@ -391,6 +425,11 @@ module project_soc (
 		.nios2_gen2_0_instruction_master_waitrequest    (nios2_gen2_0_instruction_master_waitrequest),                 //                                         .waitrequest
 		.nios2_gen2_0_instruction_master_read           (nios2_gen2_0_instruction_master_read),                        //                                         .read
 		.nios2_gen2_0_instruction_master_readdata       (nios2_gen2_0_instruction_master_readdata),                    //                                         .readdata
+		.audio_i2c_0_csr_address                        (mm_interconnect_0_audio_i2c_0_csr_address),                   //                          audio_i2c_0_csr.address
+		.audio_i2c_0_csr_write                          (mm_interconnect_0_audio_i2c_0_csr_write),                     //                                         .write
+		.audio_i2c_0_csr_read                           (mm_interconnect_0_audio_i2c_0_csr_read),                      //                                         .read
+		.audio_i2c_0_csr_readdata                       (mm_interconnect_0_audio_i2c_0_csr_readdata),                  //                                         .readdata
+		.audio_i2c_0_csr_writedata                      (mm_interconnect_0_audio_i2c_0_csr_writedata),                 //                                         .writedata
 		.cam_ctrl_pio_s1_address                        (mm_interconnect_0_cam_ctrl_pio_s1_address),                   //                          cam_ctrl_pio_s1.address
 		.cam_ctrl_pio_s1_write                          (mm_interconnect_0_cam_ctrl_pio_s1_write),                     //                                         .write
 		.cam_ctrl_pio_s1_readdata                       (mm_interconnect_0_cam_ctrl_pio_s1_readdata),                  //                                         .readdata

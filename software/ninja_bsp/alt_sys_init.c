@@ -4,7 +4,7 @@
  * Machine generated for CPU 'nios2_gen2_0' in SOPC Builder design 'project_soc'
  * SOPC Builder design path: ../../project_soc.sopcinfo
  *
- * Generated: Sat May 23 17:52:01 CST 2026
+ * Generated: Thu May 28 16:18:02 CST 2026
  */
 
 /*
@@ -68,6 +68,7 @@
  */
 
 ALTERA_NIOS2_GEN2_IRQ_INSTANCE ( NIOS2_GEN2_0, nios2_gen2_0);
+ALTERA_AVALON_I2C_INSTANCE ( AUDIO_I2C_0, audio_i2c_0);
 ALTERA_AVALON_I2C_INSTANCE ( I2C_0, i2c_0);
 ALTERA_AVALON_JTAG_UART_INSTANCE ( JTAG_UART_0, jtag_uart_0);
 ALTERA_AVALON_SYSID_QSYS_INSTANCE ( SYSID_QSYS_0, sysid_qsys_0);
@@ -93,6 +94,7 @@ void alt_irq_init ( const void* base )
 
 void alt_sys_init( void )
 {
+    ALTERA_AVALON_I2C_INIT ( AUDIO_I2C_0, audio_i2c_0);
     ALTERA_AVALON_I2C_INIT ( I2C_0, i2c_0);
     ALTERA_AVALON_JTAG_UART_INIT ( JTAG_UART_0, jtag_uart_0);
     ALTERA_AVALON_SYSID_QSYS_INIT ( SYSID_QSYS_0, sysid_qsys_0);

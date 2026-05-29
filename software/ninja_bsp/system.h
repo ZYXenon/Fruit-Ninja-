@@ -4,7 +4,7 @@
  * Machine generated for CPU 'nios2_gen2_0' in SOPC Builder design 'project_soc'
  * SOPC Builder design path: ../../project_soc.sopcinfo
  *
- * Generated: Sun May 24 23:05:25 CST 2026
+ * Generated: Thu May 28 16:18:02 CST 2026
  */
 
 /*
@@ -159,19 +159,19 @@
 #define ALT_NUM_INTERNAL_INTERRUPT_CONTROLLERS 1
 #define ALT_NUM_INTERRUPT_CONTROLLERS 1
 #define ALT_STDERR "/dev/jtag_uart_0"
-#define ALT_STDERR_BASE 0x120
+#define ALT_STDERR_BASE 0x160
 #define ALT_STDERR_DEV jtag_uart_0
 #define ALT_STDERR_IS_JTAG_UART
 #define ALT_STDERR_PRESENT
 #define ALT_STDERR_TYPE "altera_avalon_jtag_uart"
 #define ALT_STDIN "/dev/jtag_uart_0"
-#define ALT_STDIN_BASE 0x120
+#define ALT_STDIN_BASE 0x160
 #define ALT_STDIN_DEV jtag_uart_0
 #define ALT_STDIN_IS_JTAG_UART
 #define ALT_STDIN_PRESENT
 #define ALT_STDIN_TYPE "altera_avalon_jtag_uart"
 #define ALT_STDOUT "/dev/jtag_uart_0"
-#define ALT_STDOUT_BASE 0x120
+#define ALT_STDOUT_BASE 0x160
 #define ALT_STDOUT_DEV jtag_uart_0
 #define ALT_STDOUT_IS_JTAG_UART
 #define ALT_STDOUT_PRESENT
@@ -180,12 +180,29 @@
 
 
 /*
+ * audio_i2c_0 configuration
+ *
+ */
+
+#define ALT_MODULE_CLASS_audio_i2c_0 altera_avalon_i2c
+#define AUDIO_I2C_0_BASE 0x40
+#define AUDIO_I2C_0_FIFO_DEPTH 4
+#define AUDIO_I2C_0_FREQ 50000000
+#define AUDIO_I2C_0_IRQ -1
+#define AUDIO_I2C_0_IRQ_INTERRUPT_CONTROLLER_ID -1
+#define AUDIO_I2C_0_NAME "/dev/audio_i2c_0"
+#define AUDIO_I2C_0_SPAN 64
+#define AUDIO_I2C_0_TYPE "altera_avalon_i2c"
+#define AUDIO_I2C_0_USE_AV_ST 0
+
+
+/*
  * cam_ctrl_pio configuration
  *
  */
 
 #define ALT_MODULE_CLASS_cam_ctrl_pio altera_avalon_pio
-#define CAM_CTRL_PIO_BASE 0xf0
+#define CAM_CTRL_PIO_BASE 0x130
 #define CAM_CTRL_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define CAM_CTRL_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define CAM_CTRL_PIO_CAPTURE 0
@@ -239,7 +256,7 @@
  */
 
 #define ALT_MODULE_CLASS_frame_counter_pio altera_avalon_pio
-#define FRAME_COUNTER_PIO_BASE 0xd0
+#define FRAME_COUNTER_PIO_BASE 0x110
 #define FRAME_COUNTER_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define FRAME_COUNTER_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define FRAME_COUNTER_PIO_CAPTURE 0
@@ -266,7 +283,7 @@
  */
 
 #define ALT_MODULE_CLASS_fruit0_desc_pio altera_avalon_pio
-#define FRUIT0_DESC_PIO_BASE 0xa0
+#define FRUIT0_DESC_PIO_BASE 0xe0
 #define FRUIT0_DESC_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define FRUIT0_DESC_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define FRUIT0_DESC_PIO_CAPTURE 0
@@ -293,7 +310,7 @@
  */
 
 #define ALT_MODULE_CLASS_fruit1_desc_pio altera_avalon_pio
-#define FRUIT1_DESC_PIO_BASE 0x90
+#define FRUIT1_DESC_PIO_BASE 0xd0
 #define FRUIT1_DESC_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define FRUIT1_DESC_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define FRUIT1_DESC_PIO_CAPTURE 0
@@ -320,7 +337,7 @@
  */
 
 #define ALT_MODULE_CLASS_fruit2_desc_pio altera_avalon_pio
-#define FRUIT2_DESC_PIO_BASE 0x80
+#define FRUIT2_DESC_PIO_BASE 0xc0
 #define FRUIT2_DESC_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define FRUIT2_DESC_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define FRUIT2_DESC_PIO_CAPTURE 0
@@ -374,7 +391,7 @@
  */
 
 #define ALT_MODULE_CLASS_game_ctrl_pio altera_avalon_pio
-#define GAME_CTRL_PIO_BASE 0xb0
+#define GAME_CTRL_PIO_BASE 0xf0
 #define GAME_CTRL_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define GAME_CTRL_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define GAME_CTRL_PIO_CAPTURE 0
@@ -412,7 +429,7 @@
  */
 
 #define ALT_MODULE_CLASS_i2c_0 altera_avalon_i2c
-#define I2C_0_BASE 0x40
+#define I2C_0_BASE 0x80
 #define I2C_0_FIFO_DEPTH 8
 #define I2C_0_FREQ 50000000
 #define I2C_0_IRQ -1
@@ -429,7 +446,7 @@
  */
 
 #define ALT_MODULE_CLASS_jtag_uart_0 altera_avalon_jtag_uart
-#define JTAG_UART_0_BASE 0x120
+#define JTAG_UART_0_BASE 0x160
 #define JTAG_UART_0_IRQ 5
 #define JTAG_UART_0_IRQ_INTERRUPT_CONTROLLER_ID 0
 #define JTAG_UART_0_NAME "/dev/jtag_uart_0"
@@ -447,7 +464,7 @@
  */
 
 #define ALT_MODULE_CLASS_keys_pio altera_avalon_pio
-#define KEYS_PIO_BASE 0xe0
+#define KEYS_PIO_BASE 0x120
 #define KEYS_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define KEYS_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define KEYS_PIO_CAPTURE 0
@@ -542,7 +559,7 @@
  */
 
 #define ALT_MODULE_CLASS_sdram_pll altpll
-#define SDRAM_PLL_BASE 0x100
+#define SDRAM_PLL_BASE 0x140
 #define SDRAM_PLL_IRQ -1
 #define SDRAM_PLL_IRQ_INTERRUPT_CONTROLLER_ID -1
 #define SDRAM_PLL_NAME "/dev/sdram_pll"
@@ -556,13 +573,13 @@
  */
 
 #define ALT_MODULE_CLASS_sysid_qsys_0 altera_avalon_sysid_qsys
-#define SYSID_QSYS_0_BASE 0x118
+#define SYSID_QSYS_0_BASE 0x158
 #define SYSID_QSYS_0_ID 0
 #define SYSID_QSYS_0_IRQ -1
 #define SYSID_QSYS_0_IRQ_INTERRUPT_CONTROLLER_ID -1
 #define SYSID_QSYS_0_NAME "/dev/sysid_qsys_0"
 #define SYSID_QSYS_0_SPAN 8
-#define SYSID_QSYS_0_TIMESTAMP 1779634744
+#define SYSID_QSYS_0_TIMESTAMP 1779956180
 #define SYSID_QSYS_0_TYPE "altera_avalon_sysid_qsys"
 
 
@@ -572,7 +589,7 @@
  */
 
 #define ALT_MODULE_CLASS_tracker_status_pio altera_avalon_pio
-#define TRACKER_STATUS_PIO_BASE 0xc0
+#define TRACKER_STATUS_PIO_BASE 0x100
 #define TRACKER_STATUS_PIO_BIT_CLEARING_EDGE_REGISTER 0
 #define TRACKER_STATUS_PIO_BIT_MODIFYING_OUTPUT_REGISTER 0
 #define TRACKER_STATUS_PIO_CAPTURE 0

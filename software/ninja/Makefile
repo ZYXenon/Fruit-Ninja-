@@ -147,6 +147,7 @@ C_SRCS += driver_ov2640.c
 C_SRCS += driver_ov2640_basic.c
 C_SRCS += driver_ov2640_interface_template.c
 C_SRCS += main.c
+C_SRCS += driver_wm8731.c
 CXX_SRCS :=
 ASM_SRCS :=
 

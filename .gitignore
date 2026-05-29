@@ -14,3 +14,17 @@
 /software/ninja/*.map
 /software/ninja/*.objdump
 /software/ninja/*.srec
+
+# Local IDE/workspace state and simulation scratch directories.
+/eclipse_workspace/.metadata/
+/.qsys_edit/
+/work/
+/audio_work/
+/audio_analysis/
+*.qws
+
+# Audio source/debug previews generated during conversion.
+*.wav
+*.mp3
+*.MP3
+/transcript
